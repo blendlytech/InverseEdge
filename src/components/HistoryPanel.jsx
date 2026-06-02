@@ -1,7 +1,7 @@
-import React from 'react';
+
 import { isDoubleOrTriple } from '../utils/AIEngine';
 
-export default function HistoryPanel({ draws, onDeleteDraw, onClearHistory }) {
+export default function HistoryPanel({ draws, onDeleteDraw }) {
   return (
     <div className="glass-card">
 

@@ -109,13 +109,6 @@ export default function App() {
     setDraws((prev) => prev.filter((_, idx) => idx !== indexToDelete));
   };
 
-  const handleClearHistory = () => {
-    if (window.confirm('⚠️ WIPE ENTIRE DRAW HISTORY?\nThis cannot be undone. Make sure you have exported your backup sync code!')) {
-      setDraws([]);
-      setEliminatedDigits([]);
-    }
-  };
-
   const handleImportHistory = (importedDraws) => {
     setDraws(importedDraws);
   };
@@ -166,7 +159,6 @@ export default function App() {
           <HistoryPanel 
             draws={draws}
             onDeleteDraw={handleDeleteDraw}
-            onClearHistory={handleClearHistory}
           />
         </section>
 
