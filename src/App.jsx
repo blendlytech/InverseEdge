@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import HistoryPanel from './components/HistoryPanel';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import PlayGeneratorPanel from './components/PlayGeneratorPanel';
@@ -153,7 +153,12 @@ export default function App() {
       </header>
 
       {/* Main Dashboard Layout */}
-      <main className="dashboard-grid">
+      {isLoading && (
+        <div style={{ textAlign: 'center', color: 'var(--primary)', marginBottom: '16px', fontSize: '14px' }}>
+          🔄 Syncing history database...
+        </div>
+      )}
+      <main className="dashboard-grid" style={{ opacity: isLoading ? 0.6 : 1, transition: 'opacity 0.3s' }}>
         {/* Left Column: Data Entry */}
         <section style={{ position: 'relative', zIndex: '2' }}>
           <HistoryPanel 
