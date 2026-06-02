@@ -1,5 +1,10 @@
 import { useState } from 'react';
 import { runBacktest } from '../utils/AIEngine';
+import Tooltip from './Tooltip';
+
+const HelpIcon = () => (
+  <span style={{ cursor: 'help', color: 'var(--primary)', opacity: 0.8, fontSize: '12px', marginLeft: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', border: '1px solid var(--primary)', borderRadius: '50%', fontWeight: 'bold' }}>?</span>
+);
 
 export default function BacktestPanel({ draws }) {
   const [lookbackWindow, setLookbackWindow] = useState(50);
@@ -36,7 +41,10 @@ export default function BacktestPanel({ draws }) {
 
   return (
     <div className="glass-card" style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <h2 style={{ marginBottom: '8px' }} className="glow-text-secondary">Time Machine Backtester</h2>
+      <h2 style={{ marginBottom: '8px', display: 'flex', alignItems: 'center' }} className="glow-text-secondary">
+        Time Machine Backtester
+        <Tooltip text="Simulates exactly how much profit you would have made using historical data. Re-runs the AI algorithm dynamically at every step without looking into the future."><HelpIcon /></Tooltip>
+      </h2>
       <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px' }}>
         Simulate strategies against historical data to prove profitability.
       </p>

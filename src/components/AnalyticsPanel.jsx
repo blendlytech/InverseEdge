@@ -1,6 +1,11 @@
 import React from 'react';
 import { calculateFrequencies, calculateGapTimes, getAIRecommendations } from '../utils/AIEngine';
 import TemperatureChart from './TemperatureChart';
+import Tooltip from './Tooltip';
+
+const HelpIcon = () => (
+  <span style={{ cursor: 'help', color: 'var(--primary)', opacity: 0.8, fontSize: '12px', marginLeft: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', border: '1px solid var(--primary)', borderRadius: '50%', fontWeight: 'bold' }}>?</span>
+);
 
 export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimination, onSetEliminations }) {
   const [lookbackCount, setLookbackCount] = React.useState(50);
@@ -63,7 +68,10 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
   return (
     <div className="glass-card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '8px' }}>
-        <h2 className="glow-text-secondary" style={{ margin: 0 }}>AI Prediction Engine</h2>
+        <h2 className="glow-text-secondary" style={{ margin: 0, display: 'flex', alignItems: 'center' }}>
+          AI Prediction Engine
+          <Tooltip text="Analyzes historical patterns based on the Inverse Method. Uses Frequency (how often a digit hits) and Gap Times (draws since it last hit) to find freezing cold digits."><HelpIcon /></Tooltip>
+        </h2>
         
         {/* Midday/Evening Toggle */}
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -110,14 +118,20 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
           onClick={() => setShowScoreboardDetails(showScoreboardDetails === 'doubles' ? null : 'doubles')}
           style={{ background: showScoreboardDetails === 'doubles' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '8px', flex: 1, textAlign: 'center', border: showScoreboardDetails === 'doubles' ? '1px solid var(--primary)' : '1px solid var(--border-color)', cursor: 'pointer', transition: 'all 0.2s' }}
         >
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Doubles</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            Doubles
+            <Tooltip text="Draws where exactly 2 digits match (e.g., 775). Click to view details."><HelpIcon /></Tooltip>
+          </div>
           <div style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: '1' }}>{doubleCount}</div>
         </div>
         <div 
           onClick={() => setShowScoreboardDetails(showScoreboardDetails === 'triples' ? null : 'triples')}
           style={{ background: showScoreboardDetails === 'triples' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '8px', flex: 1, textAlign: 'center', border: showScoreboardDetails === 'triples' ? '1px solid var(--primary)' : '1px solid var(--border-color)', cursor: 'pointer', transition: 'all 0.2s' }}
         >
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Triples</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            Triples
+            <Tooltip text="Draws where all 3 digits match (e.g., 777). Automatically filtered out of analysis algorithms."><HelpIcon /></Tooltip>
+          </div>
           <div style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: '1' }}>{tripleCount}</div>
         </div>
       </div>
@@ -169,6 +183,7 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
       }} className="pulse-glow">
         <h4 style={{ color: 'var(--primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '15px' }}>
           🧠 AI Engine Cold Digit Recommender
+          <Tooltip text="The neural engine ranks the absolute coldest digits. Eliminating 3 digits gives you 35 plays. Eliminating 4 digits gives you 20 plays."><HelpIcon /></Tooltip>
         </h4>
         <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
           Our neural filter traces digit gap-spacing and frequency weights to find the safest numbers to eliminate.

@@ -6,6 +6,11 @@ import {
   normalizeDraw, 
   isDoubleOrTriple 
 } from '../utils/AIEngine';
+import Tooltip from './Tooltip';
+
+const HelpIcon = () => (
+  <span style={{ cursor: 'help', color: 'var(--primary)', opacity: 0.8, fontSize: '12px', marginLeft: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', border: '1px solid var(--primary)', borderRadius: '50%', fontWeight: 'bold' }}>?</span>
+);
 
 export default function PlayGeneratorPanel({ draws, eliminatedDigits }) {
   const [showOnlyFiltered, setShowOnlyFiltered] = useState(true);
@@ -48,7 +53,10 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits }) {
 
   return (
     <div className="glass-card">
-      <h2 style={{ marginBottom: '12px' }} className="glow-text-primary">Optimized Combinations Generator</h2>
+      <h2 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center' }} className="glow-text-primary">
+        Optimized Combinations Generator
+        <Tooltip text="Generates a strict mathematical list of plays by subtracting your selected cold digits from the master 120-play non-repeating set."><HelpIcon /></Tooltip>
+      </h2>
       
       {eliminatedDigits.length === 0 ? (
         <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
