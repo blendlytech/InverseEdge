@@ -290,10 +290,10 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
                       <td style={{ padding: '12px 16px', fontWeight: 'bold', letterSpacing: '1px', color: 'var(--text-main)' }}>{item.draw}</td>
                       <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>{item.combinations.length}</td>
                       <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 'bold', color: item.isHit ? 'var(--primary)' : 'var(--danger)' }}>
-                        {item.isHit ? '+' : ''}{item.profit}
+                        {item.profit >= 0 ? '+$' : '-$'}{Math.abs(item.profit).toFixed(2)}
                       </td>
                       <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 'bold', color: item.cumulativeProfit >= 0 ? 'var(--primary)' : 'var(--danger)' }}>
-                        {item.cumulativeProfit >= 0 ? '+' : ''}{item.cumulativeProfit}
+                        {item.cumulativeProfit >= 0 ? '+$' : '-$'}{Math.abs(item.cumulativeProfit).toFixed(2)}
                       </td>
                     </tr>
                     {expandedRow === idx && (
