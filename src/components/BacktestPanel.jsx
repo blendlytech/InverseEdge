@@ -304,7 +304,7 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
               <input 
                 type="number"
                 className="custom-input"
-                style={{ width: '100px' }}
+                style={{ flex: 1 }}
                 value={historyFilterDays}
                 onChange={(e) => setHistoryFilterDays(Number(e.target.value))}
                 min="0"

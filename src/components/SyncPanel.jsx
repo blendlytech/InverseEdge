@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function SyncPanel({ draws, onImportHistory }) {
+export default function SyncPanel({ draws, onImportHistory, onCloudSync, isLoading }) {
   const [importCode, setImportCode] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -67,6 +67,24 @@ export default function SyncPanel({ draws, onImportHistory }) {
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
+        {/* Cloud Sync Card */}
+        <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--primary)', borderRadius: '12px', padding: '16px', textAlign: 'left', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: 'var(--primary)' }}></div>
+          <h3 style={{ fontSize: '15px', color: 'var(--primary)', marginBottom: '8px' }}>☁️ Supabase Cloud Sync</h3>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+            Fetch the latest lottery draws from your GitHub Action scraper directly into your dashboard. This merges new live data with your historical data seamlessly.
+          </p>
+          <button 
+            onClick={() => {
+              if (onCloudSync) onCloudSync();
+            }}
+            disabled={isLoading}
+            className="btn btn-primary btn-small"
+            style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: '8px', opacity: isLoading ? 0.7 : 1 }}
+          >
+            {isLoading ? '⏳ Fetching from Supabase...' : '🔄 Pull Latest Draws'}
+          </button>
+        </div>
         {/* Export Card */}
         <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', textAlign: 'left' }}>
           <h3 style={{ fontSize: '15px', color: 'var(--text-main)', marginBottom: '8px' }}>📤 Export Sync Code (This Device)</h3>
