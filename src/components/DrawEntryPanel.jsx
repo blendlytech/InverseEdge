@@ -281,20 +281,42 @@ export default function DrawEntryPanel({ draws, onAddDraw, historyFilterDays }) 
                   const isDouble = isDoubleOrTriple(d.draw);
                   const normalized = !isDouble ? normalizeDraw(d.draw) : null;
                   const onList = !!normalized && masterSet.has(normalized);
+
+                  // Parse "2026-06-02 Midday" → dateStr + drawTypeStr
+                  const spaceIdx = d.date.indexOf(' ');
+                  const dateStr     = spaceIdx > -1 ? d.date.slice(0, spaceIdx) : d.date;
+                  const drawTypeStr = spaceIdx > -1 ? d.date.slice(spaceIdx + 1) : '';
+
+                  // Format "2026-06-02" → "Jun 2" without timezone shifting
+                  const [, mo, dy] = dateStr.split('-');
+                  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                  const formattedDate = `${MONTHS[parseInt(mo, 10) - 1]} ${parseInt(dy, 10)}`;
+
+                  const typeIcon  = drawTypeStr === 'Midday' ? '☀️' : drawTypeStr === 'Evening' ? '🌙' : '';
+                  const typeColor = drawTypeStr === 'Midday' ? '#fbbf24' : drawTypeStr === 'Evening' ? '#818cf8' : 'var(--text-muted)';
+
                   return (
                     <div
                       key={i}
-                      title={`${d.date}${isDouble ? ' — double/triple (not on list)' : onList ? ` — on master list as ${normalized}` : ''}`}
                       style={{
-                        padding: '4px 10px', borderRadius: '6px', textAlign: 'center',
-                        background: isDouble ? 'rgba(234,179,8,0.08)' : onList ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.03)',
+                        padding: '7px 12px', borderRadius: '6px', textAlign: 'center',
+                        background: isDouble ? 'rgba(234,179,8,0.08)' : 'rgba(255,255,255,0.03)',
                         border: `1px solid ${isDouble ? 'rgba(234,179,8,0.25)' : 'rgba(255,255,255,0.07)'}`,
+                        minWidth: '72px',
                       }}
                     >
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)', letterSpacing: '2px' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', fontWeight: 'bold', color: 'var(--text-main)', letterSpacing: '3px' }}>
                         {d.draw}
                       </div>
-                      <div style={{ fontSize: '9px', color: isDouble ? 'var(--secondary)' : 'var(--text-muted)', marginTop: '1px' }}>
+                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', fontWeight: '500' }}>
+                        {formattedDate}
+                      </div>
+                      {drawTypeStr && (
+                        <div style={{ fontSize: '10px', color: typeColor, marginTop: '1px', fontWeight: '600' }}>
+                          {typeIcon} {drawTypeStr}
+                        </div>
+                      )}
+                      <div style={{ fontSize: '9px', color: isDouble ? 'var(--secondary)' : 'var(--text-muted)', marginTop: '3px', fontFamily: 'var(--font-mono)', letterSpacing: '1px' }}>
                         {isDouble ? 'dbl/trpl' : onList ? normalized : '?'}
                       </div>
                     </div>
