@@ -1,0 +1,143 @@
+import React from 'react';
+import { calculateFrequencies, calculateGapTimes, getAIRecommendations } from '../utils/AIEngine';
+
+export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimination, onSetEliminations }) {
+  // Extract just the draw strings for calculations
+  const drawStrings = draws.map(d => d.draw);
+  
+  // Calculate analytics
+  const frequencies = calculateFrequencies(drawStrings);
+  const gapTimes = calculateGapTimes(drawStrings);
+
+  // Auto-prediction trigger
+  const runAIPrediction = (count) => {
+    const recommendations = getAIRecommendations(frequencies, gapTimes, count);
+    onSetEliminations(recommendations);
+  };
+
+  // Find coldest digits overall to list in analysis text
+  const sortedDigits = Array.from({ length: 10 }, (_, i) => i)
+    .sort((a, b) => {
+      if (gapTimes[a] !== gapTimes[b]) return gapTimes[b] - gapTimes[a];
+      return frequencies[a] - frequencies[b];
+    });
+
+  return (
+    <div className="glass-card">
+      <h2 style={{ marginBottom: '8px' }} className="glow-text-secondary">AI Prediction Engine</h2>
+      <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+        Analyzing digit temperature and tracking occurrences over your last 50 drawings.
+      </p>
+
+      {/* AI Recommendation Card */}
+      <div style={{ 
+        background: 'rgba(16, 185, 129, 0.05)', 
+        border: '1px solid rgba(16, 185, 129, 0.15)', 
+        borderRadius: '12px', 
+        padding: '16px',
+        marginBottom: '24px',
+        textAlign: 'left'
+      }} className="pulse-glow">
+        <h4 style={{ color: 'var(--primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '15px' }}>
+          🧠 AI Engine Cold Digit Recommender
+        </h4>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+          Our neural filter traces digit gap-spacing and frequency weights to find the safest numbers to eliminate.
+        </p>
+        
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button 
+            disabled={draws.length === 0}
+            onClick={() => runAIPrediction(2)} 
+            className="btn btn-secondary btn-small"
+            style={{ borderColor: 'rgba(16, 185, 129, 0.3)', color: 'var(--text-main)' }}
+          >
+            Predict Cold 2
+          </button>
+          <button 
+            disabled={draws.length === 0}
+            onClick={() => runAIPrediction(3)} 
+            className="btn btn-secondary btn-small"
+            style={{ borderColor: 'rgba(16, 185, 129, 0.3)', color: 'var(--text-main)' }}
+          >
+            Predict Cold 3
+          </button>
+          <button 
+            disabled={draws.length === 0}
+            onClick={() => runAIPrediction(4)} 
+            className="btn btn-secondary btn-small"
+            style={{ borderColor: 'rgba(16, 185, 129, 0.3)', color: 'var(--text-main)' }}
+          >
+            Predict Cold 4
+          </button>
+        </div>
+      </div>
+
+      {/* Digit Grid Title */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <h3 style={{ fontSize: '16px', color: 'var(--text-main)' }}>Interactive Digit Heatmap</h3>
+        {eliminatedDigits.length > 0 && (
+          <button 
+            onClick={() => onSetEliminations([])} 
+            style={{ background: 'transparent', border: 'none', color: 'var(--danger)', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}
+          >
+            Reset Eliminations
+          </button>
+        )}
+      </div>
+      <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'left', marginBottom: '12px' }}>
+        Digits are labeled with their occurrence frequency. <strong>Tap any digit</strong> to manually override and eliminate/restore it from play lists.
+      </p>
+
+      {/* Interactive Grid */}
+      <div className="digit-grid">
+        {Array.from({ length: 10 }).map((_, digit) => {
+          const freq = frequencies[digit];
+          const gap = gapTimes[digit];
+          const isEliminated = eliminatedDigits.includes(digit);
+          
+          // Determine styling state
+          let cardClass = "digit-card";
+          if (isEliminated) {
+            cardClass += " eliminated";
+          } else if (sortedDigits.slice(0, 3).includes(digit) && draws.length > 0) {
+            cardClass += " coldest"; // cold hints
+          }
+
+          return (
+            <div 
+              key={digit} 
+              className={cardClass}
+              onClick={() => onToggleElimination(digit)}
+              title={`Digit ${digit}: Drawn ${freq} times. Last seen ${gap === 999 ? 'never' : `${gap} draws ago`}.`}
+            >
+              <span className="num">{digit}</span>
+              <span className="freq">{freq}x</span>
+              <span style={{ fontSize: '9px', color: 'var(--text-muted)', marginTop: '1px' }}>
+                {gap === 999 ? 'seen' : `${gap}d ago`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Narrative analysis breakdown */}
+      {draws.length > 0 && (
+        <div style={{ marginTop: '24px', padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', textAlign: 'left' }}>
+          <h4 style={{ fontSize: '13px', color: 'var(--text-main)', marginBottom: '6px' }}>📉 Local Heat Analysis</h4>
+          <ul style={{ fontSize: '12px', color: 'var(--text-muted)', paddingLeft: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <li>
+              Coldest Digit: <strong>{sortedDigits[0]}</strong> (Last seen <strong>{gapTimes[sortedDigits[0]] === 999 ? 'never' : `${gapTimes[sortedDigits[0]]} drawings ago`}</strong>).
+            </li>
+            <li>
+              Second Coldest: <strong>{sortedDigits[1]}</strong> (Last seen <strong>{gapTimes[sortedDigits[1]] === 999 ? 'never' : `${gapTimes[sortedDigits[1]]} drawings ago`}</strong>).
+            </li>
+            <li>
+              Highest Spike: <strong>{Array.from({ length: 10 }, (_, i) => i).sort((a,b) => frequencies[b] - frequencies[a])[0]}</strong> with <strong>{Math.max(...Object.values(frequencies))} hits</strong>.
+            </li>
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
