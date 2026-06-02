@@ -393,11 +393,11 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
                   <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: '500' }}>Tickets Played</th>
                   <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: '500', textAlign: 'right' }}>
                     Draw PnL
-                    <Tooltip text="Profit or Loss for this specific draw. Calculated as the payout (if you won) minus the total cost of all tickets played."><HelpIcon /></Tooltip>
+                    <Tooltip direction="down" text="Profit or Loss for this specific draw. Calculated as the payout (if you won) minus the total cost of all tickets played."><HelpIcon /></Tooltip>
                   </th>
                   <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: '500', textAlign: 'right' }}>
                     Cumulative
-                    <Tooltip text="Your running total net profit or loss up to this point in the simulation."><HelpIcon /></Tooltip>
+                    <Tooltip direction="down" text="Your running total net profit or loss up to this point in the simulation."><HelpIcon /></Tooltip>
                   </th>
                 </tr>
               </thead>

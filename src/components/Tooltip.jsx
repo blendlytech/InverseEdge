@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function Tooltip({ text, children }) {
+export default function Tooltip({ text, children, direction = 'up' }) {
   const [show, setShow] = useState(false);
 
   return (
@@ -13,10 +13,9 @@ export default function Tooltip({ text, children }) {
       {show && (
         <div style={{
           position: 'absolute',
-          bottom: '100%',
+          ...(direction === 'up' ? { bottom: '100%', marginBottom: '8px' } : { top: '100%', marginTop: '8px' }),
           left: '50%',
           transform: 'translateX(-50%)',
-          marginBottom: '8px',
           padding: '8px 12px',
           background: 'rgba(15, 23, 42, 0.98)',
           border: '1px solid var(--primary)',
@@ -35,12 +34,14 @@ export default function Tooltip({ text, children }) {
           {text}
           <div style={{
             position: 'absolute',
-            top: '100%',
+            ...(direction === 'up' ? { top: '100%' } : { bottom: '100%' }),
             left: '50%',
             transform: 'translateX(-50%)',
             borderWidth: '5px',
             borderStyle: 'solid',
-            borderColor: 'var(--primary) transparent transparent transparent'
+            borderColor: direction === 'up' 
+              ? 'var(--primary) transparent transparent transparent' 
+              : 'transparent transparent var(--primary) transparent'
           }} />
         </div>
       )}
