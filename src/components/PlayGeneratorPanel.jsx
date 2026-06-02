@@ -168,7 +168,7 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits, historyFil
                     const val = parseInt(e.target.value, 10);
                     if (!isNaN(val)) setHistoryFilterDays(val);
                   }}
-                  style={{ width: '60px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', padding: '4px 8px' }}
+                  style={{ width: '100px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', padding: '4px 8px' }}
                 />
               </label>
               

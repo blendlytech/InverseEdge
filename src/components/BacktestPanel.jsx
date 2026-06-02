@@ -12,16 +12,49 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
   const [useHistoryFilter, setUseHistoryFilter] = useState(true);
   const [historyFilterDays, setHistoryFilterDays] = useState(initialHistoryFilterDays);
   const [drawFilter, setDrawFilter] = useState('All');
+  
+  const [timeRangeType, setTimeRangeType] = useState('recent'); // 'recent', 'date', 'all'
+  const [recentDrawsCount, setRecentDrawsCount] = useState(50);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  
   const [results, setResults] = useState(null);
 
   const handleRunSimulation = () => {
-    const filteredDraws = draws.filter(d => {
+    let filteredByDrawType = draws.filter(d => {
       if (drawFilter === 'All') return true;
       return d.date.includes(drawFilter);
     });
 
-    if (!filteredDraws || filteredDraws.length < lookbackWindow + 1) {
-      alert(`Not enough data. You need at least ${lookbackWindow + 1} ${drawFilter} draws to run a backtest with a lookback of ${lookbackWindow}.`);
+    let finalDraws = [];
+
+    if (timeRangeType === 'all') {
+      finalDraws = filteredByDrawType;
+    } else if (timeRangeType === 'recent') {
+      finalDraws = filteredByDrawType.slice(0, recentDrawsCount + lookbackWindow);
+    } else if (timeRangeType === 'date') {
+      let startIndex = -1;
+      let endIndex = -1;
+
+      for (let i = 0; i < filteredByDrawType.length; i++) {
+        const drawDate = filteredByDrawType[i].date.substring(0, 10);
+        let inRange = true;
+        if (startDate && drawDate < startDate) inRange = false;
+        if (endDate && drawDate > endDate) inRange = false;
+        
+        if (inRange) {
+          if (startIndex === -1) startIndex = i;
+          endIndex = i;
+        }
+      }
+
+      if (startIndex !== -1 && endIndex !== -1) {
+        finalDraws = filteredByDrawType.slice(startIndex, endIndex + 1 + lookbackWindow);
+      }
+    }
+
+    if (!finalDraws || finalDraws.length < lookbackWindow + 1) {
+      alert(`Not enough data. You need at least ${lookbackWindow + 1} ${drawFilter === 'All' ? '' : drawFilter + ' '}draws to run this backtest.`);
       return;
     }
 
@@ -34,7 +67,7 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
       payout: 80.00
     };
 
-    const simResults = runBacktest(filteredDraws, config);
+    const simResults = runBacktest(finalDraws, config);
     
     // The timeline is generated chronologically, so we reverse it to show newest at the top
     simResults.timeline.reverse();
@@ -53,6 +86,82 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
 
       {/* Configuration */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        
+        <div className="input-group" style={{ gridColumn: '1 / -1' }}>
+          <label>Time Range</label>
+          <div style={{ display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap', padding: '8px 0' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-main)' }}>
+              <input 
+                type="radio" 
+                name="timeRangeType" 
+                value="recent" 
+                checked={timeRangeType === 'recent'} 
+                onChange={() => setTimeRangeType('recent')} 
+              />
+              Recent Draws
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-main)' }}>
+              <input 
+                type="radio" 
+                name="timeRangeType" 
+                value="date" 
+                checked={timeRangeType === 'date'} 
+                onChange={() => setTimeRangeType('date')} 
+              />
+              Date Range
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-main)' }}>
+              <input 
+                type="radio" 
+                name="timeRangeType" 
+                value="all" 
+                checked={timeRangeType === 'all'} 
+                onChange={() => setTimeRangeType('all')} 
+              />
+              All History
+            </label>
+          </div>
+        </div>
+
+        {timeRangeType === 'recent' && (
+          <div className="input-group">
+            <label>Draws to Simulate</label>
+            <input 
+              type="number" 
+              className="custom-input" 
+              value={recentDrawsCount} 
+              onChange={(e) => setRecentDrawsCount(Number(e.target.value))}
+              min="1"
+            />
+          </div>
+        )}
+
+        {timeRangeType === 'date' && (
+          <>
+            <div className="input-group">
+              <label>Start Date</label>
+              <input 
+                type="date" 
+                className="custom-input" 
+                value={startDate} 
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="input-group">
+              <label>End Date</label>
+              <input 
+                type="date" 
+                className="custom-input" 
+                value={endDate} 
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Keeping dummy div to preserve grid flow if neither recent nor date inputs take up space */}
+        {timeRangeType === 'all' && <div />}
+
         <div className="input-group">
           <label>Lookback Window</label>
           <input 
@@ -92,7 +201,7 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
               <input 
                 type="number"
                 className="custom-input"
-                style={{ width: '60px' }}
+                style={{ width: '100px' }}
                 value={historyFilterDays}
                 onChange={(e) => setHistoryFilterDays(Number(e.target.value))}
                 min="0"
