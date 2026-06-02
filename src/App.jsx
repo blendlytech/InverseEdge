@@ -3,7 +3,7 @@ import HistoryPanel from './components/HistoryPanel';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import PlayGeneratorPanel from './components/PlayGeneratorPanel';
 import SyncPanel from './components/SyncPanel';
-
+import { supabase } from './utils/supabaseClient';
 // High-quality mock history (last 50 drawings)
 // Engineered to make 0, 1, 2 colder than average to showcase Strategy 1 alignment
 const DEFAULT_MOCK_DRAWS = [
@@ -60,11 +60,8 @@ const DEFAULT_MOCK_DRAWS = [
 ];
 
 export default function App() {
-  // Load initial draws
-  const [draws, setDraws] = useState(() => {
-    const saved = localStorage.getItem('inverse_edge_draws');
-    return saved ? JSON.parse(saved) : DEFAULT_MOCK_DRAWS;
-  });
+  const [draws, setDraws] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Load initial eliminated digits
   const [eliminatedDigits, setEliminatedDigits] = useState(() => {
@@ -75,10 +72,29 @@ export default function App() {
   // Load active right-side panel tab ('heatmap', 'playgen', 'sync')
   const [activeTab, setActiveTab] = useState('heatmap');
 
-  // Save draws to localStorage on change
+  // Fetch from Supabase on mount
   useEffect(() => {
-    localStorage.setItem('inverse_edge_draws', JSON.stringify(draws));
-  }, [draws]);
+    const fetchDraws = async () => {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('lottery_draws')
+        .select('*')
+        .order('draw_date', { ascending: false });
+        
+      if (!error && data && data.length > 0) {
+        const formatted = data.map(row => ({
+          date: `${row.draw_date} ${row.draw_type}`,
+          draw: row.draw_number
+        }));
+        setDraws(formatted);
+      } else {
+        setDraws(DEFAULT_MOCK_DRAWS);
+      }
+      setIsLoading(false);
+    };
+    
+    fetchDraws();
+  }, []);
 
   // Save eliminations to localStorage on change
   useEffect(() => {
