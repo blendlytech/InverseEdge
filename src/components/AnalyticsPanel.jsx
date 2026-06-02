@@ -1,5 +1,6 @@
 import React from 'react';
 import { calculateFrequencies, calculateGapTimes, getAIRecommendations } from '../utils/AIEngine';
+import TemperatureChart from './TemperatureChart';
 
 export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimination, onSetEliminations }) {
   const [lookbackCount, setLookbackCount] = React.useState(50);
@@ -99,6 +100,9 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
         /> 
         drawings. {maxDraws > 0 && <span style={{fontSize: '12px', opacity: 0.7}}>(Max: {maxDraws})</span>}
       </p>
+
+      {/* Visual Heatmap Chart */}
+      <TemperatureChart draws={filteredDraws} lookback={validLookback} />
 
       {/* Doubles / Triples Scoreboard */}
       <div style={{ display: 'flex', gap: '16px', marginBottom: showScoreboardDetails ? '16px' : '24px' }}>
