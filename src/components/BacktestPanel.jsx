@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { runBacktest, normalizeDraw, isDoubleOrTriple } from '../utils/AIEngine';
+import OptimizerWorker from '../utils/optimizer.worker.js?worker';
 import Tooltip from './Tooltip';
 
 const HelpIcon = () => (
@@ -20,6 +21,9 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
   
   const [results, setResults] = useState(null);
   const [expandedRow, setExpandedRow] = useState(null);
+  
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizeProgress, setOptimizeProgress] = useState(0);
 
   const handleRunSimulation = () => {
     let filteredByDrawType = draws.filter(d => {
@@ -74,6 +78,103 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
     simResults.timeline.reverse();
     setResults(simResults);
     setExpandedRow(null);
+  };
+
+  const handleAutoTune = () => {
+    let filteredByDrawType = draws.filter(d => {
+      if (drawFilter === 'All') return true;
+      return d.date.includes(drawFilter);
+    });
+
+    let finalDraws = [];
+
+    if (timeRangeType === 'all') {
+      finalDraws = filteredByDrawType;
+    } else if (timeRangeType === 'recent') {
+      finalDraws = filteredByDrawType.slice(0, recentDrawsCount + 100); // Pass a large enough buffer for optimizer max lookback of 100
+    } else if (timeRangeType === 'date') {
+      let startIndex = -1;
+      let endIndex = -1;
+
+      for (let i = 0; i < filteredByDrawType.length; i++) {
+        const drawDate = filteredByDrawType[i].date.substring(0, 10);
+        let inRange = true;
+        if (startDate && drawDate < startDate) inRange = false;
+        if (endDate && drawDate > endDate) inRange = false;
+        
+        if (inRange) {
+          if (startIndex === -1) startIndex = i;
+          endIndex = i;
+        }
+      }
+
+      if (startIndex !== -1 && endIndex !== -1) {
+        finalDraws = filteredByDrawType.slice(startIndex, endIndex + 1 + 100);
+      }
+    }
+
+    if (!finalDraws || finalDraws.length < 11) {
+      alert(`Not enough data to optimize. Please select a larger date range or more recent draws.`);
+      return;
+    }
+
+    setIsOptimizing(true);
+    setOptimizeProgress(0);
+
+    const worker = new OptimizerWorker();
+
+    worker.onmessage = (e) => {
+      const data = e.data;
+      if (data.type === 'progress') {
+        setOptimizeProgress(data.progress);
+      } else if (data.type === 'complete') {
+        const bestConfig = data.bestConfig;
+        
+        // Update UI states
+        setLookbackWindow(bestConfig.lookbackWindow);
+        setElimCount(bestConfig.elimCount);
+        setUseHistoryFilter(bestConfig.useHistoryFilter);
+        setHistoryFilterDays(bestConfig.historyFilterDays);
+
+        worker.terminate();
+        setIsOptimizing(false);
+        
+        // Re-slice with the newly discovered lookback window to simulate exactly the requested range
+        let preciseDraws = [];
+        if (timeRangeType === 'all') {
+          preciseDraws = filteredByDrawType;
+        } else if (timeRangeType === 'recent') {
+          preciseDraws = filteredByDrawType.slice(0, recentDrawsCount + bestConfig.lookbackWindow);
+        } else if (timeRangeType === 'date') {
+            let startIndex = -1, endIndex = -1;
+            for (let i = 0; i < filteredByDrawType.length; i++) {
+                const drawDate = filteredByDrawType[i].date.substring(0, 10);
+                let inRange = true;
+                if (startDate && drawDate < startDate) inRange = false;
+                if (endDate && drawDate > endDate) inRange = false;
+                if (inRange) {
+                  if (startIndex === -1) startIndex = i;
+                  endIndex = i;
+                }
+            }
+            if (startIndex !== -1 && endIndex !== -1) {
+              preciseDraws = filteredByDrawType.slice(startIndex, endIndex + 1 + bestConfig.lookbackWindow);
+            }
+        }
+        
+        const simResults = runBacktest(preciseDraws, bestConfig);
+        simResults.timeline.reverse();
+        setResults(simResults);
+        setExpandedRow(null);
+        
+      } else if (data.error) {
+        alert(data.error);
+        worker.terminate();
+        setIsOptimizing(false);
+      }
+    };
+
+    worker.postMessage({ draws: finalDraws });
   };
 
   return (
@@ -227,9 +328,35 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
         </div>
       </div>
 
-      <button onClick={handleRunSimulation} className="btn btn-secondary" style={{ width: '100%', marginBottom: '32px' }}>
-        Run Simulation
-      </button>
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '32px' }}>
+        <button 
+          onClick={handleRunSimulation} 
+          className="btn btn-secondary" 
+          style={{ flex: 1 }}
+          disabled={isOptimizing}
+        >
+          Run Simulation
+        </button>
+        <button 
+          onClick={handleAutoTune} 
+          className="btn btn-primary" 
+          style={{ flex: 1, position: 'relative', overflow: 'hidden' }}
+          disabled={isOptimizing}
+        >
+          {isOptimizing ? `🤖 Optimizing... ${optimizeProgress}%` : '🤖 Auto-Tune AI'}
+          {isOptimizing && (
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              height: '4px',
+              background: '#fff',
+              width: `${optimizeProgress}%`,
+              transition: 'width 0.1s linear'
+            }} />
+          )}
+        </button>
+      </div>
 
       {/* Results Scoreboard */}
       {results && (
