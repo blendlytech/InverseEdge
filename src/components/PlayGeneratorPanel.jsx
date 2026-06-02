@@ -5,6 +5,7 @@ import {
   isDoubleOrTriple,
   scoreStraightPermutations,
   scoreComboGaps,
+  getPositionFrequencies,
 } from '../utils/AIEngine';
 import Tooltip from './Tooltip';
 
@@ -55,6 +56,12 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
     lastHit,
     perms: scoreStraightPermutations(combo, drawStrings, lookback),
   }));
+
+  // Combos completely absent from the entire lookback window (sentinel 999)
+  const criticalOverdue = scoredActive.filter(s => s.lastHit === 999);
+
+  // Digit frequency per draw position — drives the Position Guide
+  const posFreqs = getPositionFrequencies(drawStrings, lookback);
 
   // Exact orderings for selected combo
   const straightPerms = selectedCombo
@@ -147,6 +154,39 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
         ))}
       </div>
 
+      {/* ── OVERDUE ALERT BANNER ───────────────────────────────────────── */}
+      {criticalOverdue.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap',
+          padding: '12px 16px', marginBottom: '16px',
+          background: 'rgba(234,179,8,0.07)', border: '1px solid rgba(234,179,8,0.35)', borderRadius: '10px',
+        }}>
+          <div style={{ fontSize: '20px', lineHeight: 1, flexShrink: 0 }}>🔥</div>
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--secondary)', fontWeight: '700', marginBottom: '4px', display: 'flex', alignItems: 'center' }}>
+              {criticalOverdue.length} Combinations Critically Overdue
+              <Tooltip direction="down" text={`These ${criticalOverdue.length} combinations have not appeared at all within your current ${lookback}-draw scan window. They represent the longest recorded absence in your data — highest statistical priority. They are shown first in Today's Top Picks.`}>
+                <HelpIcon />
+              </Tooltip>
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Not seen in the last <strong style={{ color: 'var(--text-main)' }}>{lookback} draws</strong>:&nbsp;
+              {criticalOverdue.slice(0, 8).map(s => (
+                <span
+                  key={s.combo}
+                  onClick={() => setSelectedCombo(selectedCombo === s.combo ? null : s.combo)}
+                  style={{ fontFamily: 'var(--font-mono)', fontWeight: '700', color: 'var(--secondary)', cursor: 'pointer', marginRight: '8px' }}
+                  title="Click to open Exact Bet Analyzer"
+                >
+                  {s.combo}
+                </span>
+              ))}
+              {criticalOverdue.length > 8 && <span style={{ color: 'var(--text-muted)' }}>+{criticalOverdue.length - 8} more</span>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── TODAY'S TOP PICKS ──────────────────────────────────────────── */}
       {topPicks.length > 0 && (
         <div style={{
@@ -235,6 +275,80 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
           </div>
         </div>
       )}
+
+      {/* ── POSITION GUIDE ─────────────────────────────────────────────── */}
+      {posFreqs && drawStrings.length > 0 && (() => {
+        const labels = ['Pos 1 — Left digit', 'Pos 2 — Middle digit', 'Pos 3 — Right digit'];
+        // Build top-3 entries per position
+        const positions = posFreqs.map(freq => {
+          const entries = Object.entries(freq)
+            .map(([d, c]) => [parseInt(d, 10), c])
+            .sort((a, b) => b[1] - a[1]);
+          const max = entries[0]?.[1] || 1;
+          return { entries, max, hotDigit: entries[0]?.[0] };
+        });
+        const suggested = positions.map(p => p.hotDigit).join('');
+
+        return (
+          <div style={{ marginBottom: '24px' }}>
+            <h3 style={{ fontSize: '14px', color: 'var(--text-main)', fontWeight: '700', marginBottom: '10px', display: 'flex', alignItems: 'center' }}>
+              📍 Position Hot-Digit Guide
+              <Tooltip text={`Shows which digit appears most often in each draw position over the last ${lookback} draws. Use this to choose the best exact ordering for your straight bet — put the hottest (green) digit from each position in order. Example: if Pos 1 = 3, Pos 2 = 1, Pos 3 = 8, your suggested straight is 318.`}>
+                <HelpIcon />
+              </Tooltip>
+            </h3>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              {positions.map(({ entries, max, hotDigit }, posIdx) => (
+                <div key={posIdx} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '8px', textAlign: 'center' }}>
+                    {labels[posIdx]}
+                  </div>
+                  {entries.slice(0, 5).map(([digit, count]) => {
+                    const isHot = digit === hotDigit;
+                    const pct = max > 0 ? (count / max) * 100 : 0;
+                    return (
+                      <div key={digit} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '5px' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: isHot ? '700' : 'normal', color: isHot ? 'var(--primary)' : 'var(--text-main)', width: '12px', textAlign: 'center', flexShrink: 0 }}>
+                          {digit}
+                        </span>
+                        <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                          <div style={{ width: `${pct}%`, height: '100%', background: isHot ? 'var(--primary)' : 'rgba(16,185,129,0.3)', borderRadius: '3px', transition: 'width 0.3s' }} />
+                        </div>
+                        <span style={{ fontSize: '10px', color: isHot ? 'var(--primary)' : 'var(--text-muted)', width: '22px', textAlign: 'right', fontWeight: isHot ? '600' : 'normal', flexShrink: 0 }}>
+                          {count}×
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ marginTop: '8px', textAlign: 'center', padding: '5px', background: 'rgba(16,185,129,0.08)', borderRadius: '5px', border: '1px solid rgba(16,185,129,0.2)' }}>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Hottest: </span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', fontWeight: 'bold', color: 'var(--primary)' }}>{hotDigit}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                💡 <strong style={{ color: 'var(--text-main)' }}>Suggested straight ordering</strong> (hottest digit per position):
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '24px', fontWeight: 'bold', color: 'var(--primary)', letterSpacing: '5px' }}>
+                {suggested}
+              </span>
+              <button
+                onClick={() => { navigator.clipboard.writeText(suggested); alert(`📋 ${suggested} copied!`); }}
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', padding: '4px 10px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px' }}
+              >
+                📋 Copy
+              </button>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', flex: 1 }}>
+                Cross-reference with your Top Pick's exact orderings — if this matches a ★ OVERDUE ordering, that's your highest-confidence straight bet.
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── THE 120 MASTER LIST ─────────────────────────────────────────── */}
       <div>

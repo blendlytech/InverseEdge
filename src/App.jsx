@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
+import DrawEntryPanel from './components/DrawEntryPanel';
+import FrequencyPanel from './components/FrequencyPanel';
 import HistoryPanel from './components/HistoryPanel';
 import PlayGeneratorPanel from './components/PlayGeneratorPanel';
+import WinLogPanel from './components/WinLogPanel';
 import { supabase } from './utils/supabaseClient';
 // High-quality mock history (last 50 drawings)
 // Engineered to make 0, 1, 2 colder than average to showcase Strategy 1 alignment
@@ -1558,6 +1561,13 @@ export default function App() {
 
   const handleDeleteDraw = idx => setDraws(prev => prev.filter((_, i) => i !== idx));
 
+  const handleAddDraw = newDraw => {
+    setDraws(prev => {
+      const updated = [newDraw, ...prev];
+      return updated.sort((a, b) => b.date.localeCompare(a.date));
+    });
+  };
+
   return (
     <div className="container">
       <div className="ambient-glow"></div>
@@ -1586,11 +1596,21 @@ export default function App() {
         position: 'relative', zIndex: 2,
         opacity: isLoading ? 0.6 : 1, transition: 'opacity 0.3s'
       }}>
+        <DrawEntryPanel
+          draws={draws}
+          onAddDraw={handleAddDraw}
+          historyFilterDays={historyFilterDays}
+        />
+
         <PlayGeneratorPanel
           draws={draws}
           historyFilterDays={historyFilterDays}
           setHistoryFilterDays={setHistoryFilterDays}
         />
+
+        <FrequencyPanel draws={draws} />
+
+        <WinLogPanel draws={draws} />
 
         {/* Collapsible draw history */}
         <div className="glass-card" style={{ padding: '14px 18px' }}>

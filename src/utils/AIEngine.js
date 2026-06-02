@@ -312,3 +312,34 @@ export function scoreStraightPermutations(combo, draws, lookback = 100) {
     return { perm, lastHit, frequency };
   }).sort((a, b) => b.lastHit - a.lastHit);
 }
+
+/**
+ * Counts how many times each combo in the master list has appeared as a box hit
+ * within the most recent `lookback` draws. Skips doubles/triples.
+ * Returns combos ranked most-frequent first, plus metadata used for pattern analysis.
+ *
+ * @param {string[]} masterList  All 120 non-repeating combos
+ * @param {string[]} draws       Raw draw strings newest-first
+ * @param {number}   lookback    How many draws to scan (use draws.length for all data)
+ * @returns {{ ranked: Array<{combo,hits}>, validDrawCount: number, expectedHits: number }}
+ */
+export function scoreComboFrequency(masterList, draws, lookback) {
+  const recent = draws.slice(0, lookback);
+  const validDraws = recent.filter(d => !isDoubleOrTriple(d));
+
+  const counts = Object.fromEntries(masterList.map(c => [c, 0]));
+  validDraws.forEach(draw => {
+    const norm = normalizeDraw(draw);
+    if (Object.prototype.hasOwnProperty.call(counts, norm)) counts[norm]++;
+  });
+
+  const ranked = masterList
+    .map(combo => ({ combo, hits: counts[combo] }))
+    .sort((a, b) => b.hits - a.hits);
+
+  return {
+    ranked,
+    validDrawCount: validDraws.length,
+    expectedHits: validDraws.length / 120,
+  };
+}
