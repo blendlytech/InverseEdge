@@ -74,6 +74,10 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits }) {
             <div>
               <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase' }}>Active Strategy</span>
               <strong style={{ fontSize: '16px', color: 'var(--secondary)' }}>
+                {eliminatedDigits.length === 3 ? "Strategy 1/2: " : ""}
+                {eliminatedDigits.length === 2 ? "Strategy 3: " : ""}
+                {eliminatedDigits.length === 1 ? "Strategy 4: " : ""}
+                {eliminatedDigits.length === 4 ? "Strategy 5: " : ""}
                 {eliminatedDigits.length}-Digit Elimination ({10 - eliminatedDigits.length} remaining)
               </strong>
             </div>
@@ -84,6 +88,22 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits }) {
               </strong>
             </div>
           </div>
+
+          {/* Strategy 4 Warning */}
+          {eliminatedDigits.length === 1 && (
+            <div style={{ 
+              background: 'rgba(239, 68, 68, 0.05)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '20px',
+              fontSize: '13px',
+              color: 'var(--danger)',
+              textAlign: 'left'
+            }}>
+              ⚠️ <strong>Not Recommended:</strong> Strategy 4 (Single-Digit Elimination) yields a significantly lower net profit margin. Two-digit, three-digit, or four-digit eliminations provide a much better risk-to-reward ratio according to The Inverse Method Guide.
+            </div>
+          )}
 
           {/* Profit margins details */}
           <div style={{ 
