@@ -75,15 +75,6 @@ export default function HistoryPanel({ draws, onAddDraw, onDeleteDraw, onClearHi
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
         <h3 style={{ fontSize: '18px', color: 'var(--text-main)' }}>Draw History ({draws.length})</h3>
-        {draws.length > 0 && (
-          <button 
-            onClick={onClearHistory} 
-            className="btn btn-danger btn-small"
-            title="Wipe entire draw database"
-          >
-            Clear All
-          </button>
-        )}
       </div>
 
       <div style={{ maxHeight: '280px', overflowY: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'rgba(15, 23, 42, 0.4)' }}>
