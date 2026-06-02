@@ -79,7 +79,8 @@ export default function App() {
       const { data, error } = await supabase
         .from('lottery_draws')
         .select('*')
-        .order('draw_date', { ascending: false });
+        .order('draw_date', { ascending: false })
+        .order('draw_type', { ascending: true });
         
       if (!error && data && data.length > 0) {
         const formatted = data.map(row => ({
