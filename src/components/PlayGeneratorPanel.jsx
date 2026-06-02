@@ -158,6 +158,7 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits, historyFil
                   </h3>
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     Gap window:
+                    <Tooltip direction="down" text="How many recent draws to scan when ranking combos by overdue status. Default 200 balances history depth with relevance. Lower (50–100) = recent-pattern focus, so more combos appear overdue. Higher (300–500) = broader view, only truly long-absent combos surface as overdue. Powers the overdue badges, Top Picks, and Sniper Mode."><HelpIcon /></Tooltip>
                     <input
                       type="number" min="20" max="999" value={comboLookback}
                       onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v > 0) setComboLookback(v); }}
