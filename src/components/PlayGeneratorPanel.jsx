@@ -23,6 +23,7 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits, historyFil
   const [sniperCount, setSniperCount] = useState(5);
   const [comboLookback, setComboLookback] = useState(200);
   const [showPositionMap, setShowPositionMap] = useState(true);
+  const [wagerPerCombo, setWagerPerCombo] = useState(1.00);
 
   // ── Core 120 Master List pipeline ──────────────────────────────
   const masterList = generateMasterList();
@@ -62,8 +63,8 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits, historyFil
   const activeCombos = filteredCombinations.length;
   const filteredCount = totalCombos - activeCombos;
   const displayCount = sniperMode ? Math.min(sniperCount, activeCombos) : activeCombos;
-  const totalInvestment = displayCount * 1.00;
-  const expectedPayout = 80.00;
+  const totalInvestment = displayCount * wagerPerCombo;
+  const expectedPayout = 80.00 * wagerPerCombo;
   const netProfit = expectedPayout - totalInvestment;
 
   const handleCopy = () => {
@@ -125,6 +126,28 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits, historyFil
             </div>
           )}
 
+          {/* ── Wager Settings ─────────────────────────────────────────── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)', flexShrink: 0, marginRight: '2px' }}>Wager per combo:</span>
+            {[0.25, 0.50, 1.00, 2.00].map(amt => (
+              <button
+                key={amt}
+                onClick={() => setWagerPerCombo(amt)}
+                style={{ padding: '4px 10px', borderRadius: '6px', border: `1px solid ${wagerPerCombo === amt ? 'var(--primary)' : 'var(--border-color)'}`, background: wagerPerCombo === amt ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.03)', color: wagerPerCombo === amt ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', fontSize: '13px', fontWeight: wagerPerCombo === amt ? '600' : 'normal', fontFamily: 'var(--font-mono)' }}
+              >
+                ${amt.toFixed(2)}
+              </button>
+            ))}
+            <input
+              type="number" min="0.25" max="10" step="0.25" value={wagerPerCombo}
+              onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v) && v > 0) setWagerPerCombo(parseFloat(v.toFixed(2))); }}
+              style={{ width: '64px', padding: '4px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', fontSize: '13px' }}
+            />
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '4px' }}>
+              → spend <strong style={{ color: 'var(--text-main)' }}>${totalInvestment.toFixed(2)}</strong> · win <strong style={{ color: 'var(--primary)' }}>${expectedPayout.toFixed(2)}</strong> · net <strong style={{ color: netProfit >= 0 ? 'var(--primary)' : 'var(--danger)' }}>${netProfit.toFixed(2)}</strong>
+            </span>
+          </div>
+
           {/* ── TODAY'S TOP PICKS ──────────────────────────────────────── */}
           {filteredCombinations.length > 0 && (
             <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(6,182,212,0.04))', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '12px', padding: '14px', marginBottom: '20px' }}>
@@ -181,7 +204,7 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits, historyFil
               </div>
 
               <p style={{ marginTop: '10px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                💰 $0.50 straight + $0.50 box on each = <strong style={{ color: 'var(--text-main)' }}>${(topPicks.length * 1).toFixed(2)}</strong> total. These are the most overdue combinations from the Master List — your highest-priority plays every draw.
+                💰 ${wagerPerCombo.toFixed(2)}/combo × {topPicks.length} picks = <strong style={{ color: 'var(--text-main)' }}>${(topPicks.length * wagerPerCombo).toFixed(2)}</strong> box total. Add an equal straight bet on each "Best Straight" for additional exact-win upside. Adjust the wager above to match your budget.
               </p>
             </div>
           )}
@@ -194,7 +217,7 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits, historyFil
               {sniperMode && <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>of {activeCombos} active</span>}
             </div>
             <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Daily Cost ($1/ea)</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Daily Cost (${wagerPerCombo.toFixed(2)}/ea)</span>
               <h3 style={{ fontSize: '22px', color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>${totalInvestment.toFixed(2)}</h3>
             </div>
             <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
@@ -434,7 +457,7 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits, historyFil
           )}
 
           <div style={{ marginTop: '16px', fontSize: '11px', color: 'var(--text-muted)', textAlign: 'left' }}>
-            📝 <strong>How to play:</strong> Start with the <strong>Top 3 Picks</strong> above ($0.50 straight + $0.50 box each = $3 total). Enable <strong>Sniper Mode</strong> to focus on the top N most overdue for a controlled daily budget. Click any combination for the full straight-bet permutation analysis.
+            📝 <strong>How to play:</strong> Start with the <strong>Top 3 Picks</strong> above (${wagerPerCombo.toFixed(2)}/combo box = <strong>${(topPicks.length * wagerPerCombo).toFixed(2)}</strong> total). Enable <strong>Sniper Mode</strong> to narrow to the top N most overdue. Adjust the <strong>Wager per combo</strong> above at any time — all costs and payouts update instantly.
           </div>
         </div>
       )}
