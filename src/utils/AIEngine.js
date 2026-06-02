@@ -226,6 +226,54 @@ export function runBacktest(draws, config) {
 }
 
 /**
+ * Scores each combo in the active list by draws since its last box hit.
+ * Most overdue combos are ranked first. Powers Sniper Mode and Top Picks.
+ * @param {string[]} combinations Active combo list (sorted box strings e.g. "345")
+ * @param {string[]} draws Raw draw strings newest-first
+ * @param {number} lookback Number of draws to scan back
+ * @returns {Array<{combo: string, lastHit: number, frequency: number}>} Sorted most-overdue first
+ */
+export function scoreComboGaps(combinations, draws, lookback = 200) {
+  const recent = draws.slice(0, lookback);
+  return combinations.map(combo => {
+    let lastHit = 999;
+    let frequency = 0;
+    for (let i = 0; i < recent.length; i++) {
+      if (!isDoubleOrTriple(recent[i]) && normalizeDraw(recent[i]) === combo) {
+        frequency++;
+        if (lastHit === 999) lastHit = i;
+      }
+    }
+    return { combo, lastHit, frequency };
+  }).sort((a, b) => b.lastHit - a.lastHit);
+}
+
+/**
+ * Counts how often each digit (0-9) appears in each draw position over recent draws.
+ * Skips doubles/triples to keep analysis aligned with the master list universe.
+ * @param {string[]} draws Raw draw strings newest-first
+ * @param {number} lookback Number of recent draws to analyze
+ * @returns {Array<Record<number, number>>} 3-element array [pos0, pos1, pos2] of digit→count maps
+ */
+export function getPositionFrequencies(draws, lookback = 14) {
+  const recent = draws.slice(0, lookback).filter(d => !isDoubleOrTriple(d));
+  const positions = [0, 1, 2].map(() => {
+    const freq = {};
+    for (let i = 0; i <= 9; i++) freq[i] = 0;
+    return freq;
+  });
+  recent.forEach(draw => {
+    if (draw && draw.length === 3) {
+      draw.split('').forEach((digit, pos) => {
+        const num = parseInt(digit, 10);
+        if (!isNaN(num)) positions[pos][num]++;
+      });
+    }
+  });
+  return positions;
+}
+
+/**
  * Generates all 6 exact-order permutations of a 3-digit combination.
  * All master list combos have non-repeating digits, so there are always exactly 6.
  * @param {string} combo A 3-digit combination (e.g. "345")
