@@ -111,6 +111,9 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
 
       {/* Visual Heatmap Chart */}
       <TemperatureChart draws={filteredDraws} lookback={validLookback} />
+      <p style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '-16px', marginBottom: '24px', opacity: 0.8 }}>
+        💡 <strong>Pro Tip:</strong> Click on any digit in the chart's legend above to instantly hide or isolate its timeline.
+      </p>
 
       {/* Doubles / Triples Scoreboard */}
       <div style={{ display: 'flex', gap: '16px', marginBottom: showScoreboardDetails ? '16px' : '24px' }}>
