@@ -15,19 +15,29 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
   const frequencies = calculateFrequencies(drawStrings);
   const gapTimes = calculateGapTimes(drawStrings);
 
-    // Calculate Doubles and Triples in the current lookback window
-  let doubleCount = 0;
-  let tripleCount = 0;
+  const [showScoreboardDetails, setShowScoreboardDetails] = React.useState(null);
+
+  // Calculate Doubles and Triples in the current lookback window
+  const doublesList = [];
+  const triplesList = [];
+  const doubleFrequencies = {};
+  const tripleFrequencies = {};
   
-  drawStrings.forEach(draw => {
+  draws.slice(0, validLookback).forEach(d => {
+    const draw = d.draw;
     if (draw && draw.length === 3) {
       if (draw[0] === draw[1] && draw[1] === draw[2]) {
-        tripleCount++;
+        triplesList.push(d);
+        tripleFrequencies[draw] = (tripleFrequencies[draw] || 0) + 1;
       } else if (draw[0] === draw[1] || draw[1] === draw[2] || draw[0] === draw[2]) {
-        doubleCount++;
+        doublesList.push(d);
+        doubleFrequencies[draw] = (doubleFrequencies[draw] || 0) + 1;
       }
     }
   });
+
+  const doubleCount = doublesList.length;
+  const tripleCount = triplesList.length;
 
   // Auto-prediction trigger
   const runAIPrediction = (count) => {
