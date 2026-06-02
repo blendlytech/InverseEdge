@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { runBacktest } from '../utils/AIEngine';
+import React, { useState } from 'react';
+import { runBacktest, normalizeDraw, isDoubleOrTriple } from '../utils/AIEngine';
 import Tooltip from './Tooltip';
 
 const HelpIcon = () => (
@@ -19,6 +19,7 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
   const [endDate, setEndDate] = useState('');
   
   const [results, setResults] = useState(null);
+  const [expandedRow, setExpandedRow] = useState(null);
 
   const handleRunSimulation = () => {
     let filteredByDrawType = draws.filter(d => {
@@ -72,6 +73,7 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
     // The timeline is generated chronologically, so we reverse it to show newest at the top
     simResults.timeline.reverse();
     setResults(simResults);
+    setExpandedRow(null);
   };
 
   return (
@@ -262,23 +264,71 @@ export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) 
                   <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: '500' }}>Date</th>
                   <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: '500' }}>Actual Draw</th>
                   <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: '500' }}>Tickets Played</th>
-                  <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: '500', textAlign: 'right' }}>Draw PnL</th>
-                  <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: '500', textAlign: 'right' }}>Cumulative</th>
+                  <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: '500', textAlign: 'right' }}>
+                    Draw PnL
+                    <Tooltip text="Profit or Loss for this specific draw. Calculated as the payout (if you won) minus the total cost of all tickets played."><HelpIcon /></Tooltip>
+                  </th>
+                  <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: '500', textAlign: 'right' }}>
+                    Cumulative
+                    <Tooltip text="Your running total net profit or loss up to this point in the simulation."><HelpIcon /></Tooltip>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {results.timeline.map((item, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: item.isHit ? 'rgba(16, 185, 129, 0.05)' : 'transparent' }}>
-                    <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>{item.date}</td>
-                    <td style={{ padding: '12px 16px', fontWeight: 'bold', letterSpacing: '1px', color: 'var(--text-main)' }}>{item.draw}</td>
-                    <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>{item.combinations}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 'bold', color: item.isHit ? 'var(--primary)' : 'var(--danger)' }}>
-                      {item.isHit ? '+' : ''}{item.profit}
-                    </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 'bold', color: item.cumulativeProfit >= 0 ? 'var(--primary)' : 'var(--danger)' }}>
-                      {item.cumulativeProfit >= 0 ? '+' : ''}{item.cumulativeProfit}
-                    </td>
-                  </tr>
+                  <React.Fragment key={idx}>
+                    <tr 
+                      onClick={() => setExpandedRow(expandedRow === idx ? null : idx)}
+                      style={{ 
+                        borderBottom: expandedRow === idx ? 'none' : '1px solid rgba(255,255,255,0.05)', 
+                        background: item.isHit ? 'rgba(16, 185, 129, 0.05)' : 'transparent',
+                        cursor: 'pointer'
+                      }}
+                      title="Click to view plays"
+                    >
+                      <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>{item.date}</td>
+                      <td style={{ padding: '12px 16px', fontWeight: 'bold', letterSpacing: '1px', color: 'var(--text-main)' }}>{item.draw}</td>
+                      <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>{item.combinations.length}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 'bold', color: item.isHit ? 'var(--primary)' : 'var(--danger)' }}>
+                        {item.isHit ? '+' : ''}{item.profit}
+                      </td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 'bold', color: item.cumulativeProfit >= 0 ? 'var(--primary)' : 'var(--danger)' }}>
+                        {item.cumulativeProfit >= 0 ? '+' : ''}{item.cumulativeProfit}
+                      </td>
+                    </tr>
+                    {expandedRow === idx && (
+                      <tr style={{ background: 'rgba(0,0,0,0.3)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td colSpan="5" style={{ padding: '16px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                            <div>
+                              <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Eliminated Digits</span>
+                              <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--danger)', fontFamily: 'var(--font-mono)' }}>
+                                {item.elims && item.elims.length > 0 ? item.elims.join(', ') : 'None'}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Status</span>
+                              <div style={{ fontSize: '16px', fontWeight: 'bold', color: item.isHit ? 'var(--primary)' : 'var(--danger)' }}>
+                                {item.isHit ? 'WIN' : 'LOSS'}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Played Combinations ({item.combinations.length})</span>
+                          <div className="comb-list-container" style={{ marginTop: '8px', padding: '12px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
+                            {item.combinations.map(comb => {
+                              const isWinningComb = normalizeDraw(item.draw) === comb && !isDoubleOrTriple(item.draw);
+                              return (
+                                <div key={comb} className="comb-badge" style={isWinningComb ? { background: 'var(--primary)', color: '#000', borderColor: 'var(--primary)' } : {}}>
+                                  {comb}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

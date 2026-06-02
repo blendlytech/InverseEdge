@@ -206,7 +206,7 @@ export function runBacktest(draws, config) {
       draw: currentDraw.draw,
       isHit,
       cost,
-      combinations: combinations.length,
+      combinations: combinations,
       elims,
       profit: drawProfit,
       cumulativeProfit: totalReturn - totalSpend
