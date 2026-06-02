@@ -150,7 +150,7 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits }) {
               color: 'var(--text-main)',
               textAlign: 'left'
             }}>
-              🔥 <strong>History Filter Advantage:</strong> Automatically removed <strong>{filteredCount} combinations</strong> that matched draws from the last 14 days. This **saved you ${filteredCount.toFixed(2)}** in capital and pushed your net profit up from ${(expectedPayout - totalCombos).toFixed(2)} to **${netProfit.toFixed(2)}**!
+              🔥 <strong>History Filter Advantage<Tooltip text="Combinations drawn in the last 14 days are statistically unlikely to repeat so soon. We automatically filter them out to save you capital and increase your net profit."><HelpIcon /></Tooltip>:</strong> Automatically removed <strong>{filteredCount} combinations</strong> that matched draws from the last 14 days. This **saved you ${filteredCount.toFixed(2)}** in capital and pushed your net profit up from ${(expectedPayout - totalCombos).toFixed(2)} to **${netProfit.toFixed(2)}**!
             </div>
           )}
 
