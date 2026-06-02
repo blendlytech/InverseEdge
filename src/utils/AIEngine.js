@@ -145,3 +145,82 @@ export function applyHistoryFilter(combinations, recentDraws) {
   
   return combinations.filter(comb => !filterSet.has(comb));
 }
+
+/**
+ * Runs a historical backtest simulation over the dataset.
+ * @param {Array<{date: string, draw: string}>} draws Reverse-chronological draws
+ * @param {Object} config Simulation parameters
+ * @returns {Object} Simulation results including timeline and summary stats
+ */
+export function runBacktest(draws, config) {
+  const { lookbackWindow = 50, elimCount = 3, useHistoryFilter = true, wager = 1.00, payout = 80.00 } = config;
+  
+  let totalWins = 0;
+  let totalLosses = 0;
+  let totalSpend = 0;
+  let totalReturn = 0;
+  const timeline = [];
+
+  const maxStartIndex = draws.length - 1 - lookbackWindow;
+  
+  // Iterate from oldest playable draw to newest
+  for (let i = maxStartIndex; i >= 0; i--) {
+    const currentDraw = draws[i];
+    
+    // The "past" is the window strictly before the current draw
+    const pastDraws = draws.slice(i + 1, i + 1 + lookbackWindow).map(d => d.draw);
+    
+    // Calculate AI state based ONLY on the past
+    const freqs = calculateFrequencies(pastDraws);
+    const gaps = calculateGapTimes(pastDraws);
+    const elims = getAIRecommendations(freqs, gaps, elimCount);
+    
+    // Generate plays
+    let combinations = generateMasterList();
+    combinations = eliminateCombinations(combinations, elims);
+    if (useHistoryFilter) {
+      combinations = applyHistoryFilter(combinations, pastDraws);
+    }
+    
+    const cost = combinations.length * wager;
+    totalSpend += cost;
+    
+    // Evaluate outcome
+    const isDoubleTriple = isDoubleOrTriple(currentDraw.draw);
+    const actualNorm = normalizeDraw(currentDraw.draw);
+    
+    const isHit = !isDoubleTriple && combinations.includes(actualNorm);
+    
+    let drawProfit = 0;
+    if (isHit) {
+      totalWins++;
+      totalReturn += payout;
+      drawProfit = payout - cost;
+    } else {
+      totalLosses++;
+      drawProfit = -cost;
+    }
+    
+    timeline.push({
+      date: currentDraw.date,
+      draw: currentDraw.draw,
+      isHit,
+      cost,
+      combinations: combinations.length,
+      elims,
+      profit: drawProfit,
+      cumulativeProfit: totalReturn - totalSpend
+    });
+  }
+  
+  return {
+    totalWins,
+    totalLosses,
+    totalSpend,
+    totalReturn,
+    netProfit: totalReturn - totalSpend,
+    winRate: (totalWins / (totalWins + totalLosses)) * 100,
+    totalDraws: totalWins + totalLosses,
+    timeline
+  };
+}

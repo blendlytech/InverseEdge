@@ -3,6 +3,7 @@ import HistoryPanel from './components/HistoryPanel';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import PlayGeneratorPanel from './components/PlayGeneratorPanel';
 import SyncPanel from './components/SyncPanel';
+import BacktestPanel from './components/BacktestPanel';
 import { supabase } from './utils/supabaseClient';
 // High-quality mock history (last 50 drawings)
 // Engineered to make 0, 1, 2 colder than average to showcase Strategy 1 alignment
@@ -191,6 +192,12 @@ export default function App() {
               🎯 Combination Generator
             </button>
             <button 
+              className={`tab-btn ${activeTab === 'backtest' ? 'active' : ''}`}
+              onClick={() => setActiveTab('backtest')}
+            >
+              ⏳ Time Machine
+            </button>
+            <button 
               className={`tab-btn ${activeTab === 'sync' ? 'active' : ''}`}
               onClick={() => setActiveTab('sync')}
             >
@@ -213,6 +220,10 @@ export default function App() {
               draws={draws}
               eliminatedDigits={eliminatedDigits}
             />
+          )}
+
+          {activeTab === 'backtest' && (
+            <BacktestPanel draws={draws} />
           )}
 
           {activeTab === 'sync' && (
