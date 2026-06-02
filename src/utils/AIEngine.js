@@ -134,11 +134,11 @@ export function normalizeDraw(draw) {
  * @param {string[]} recentDraws Array of past drawings
  * @returns {string[]} Filtered play list
  */
-export function applyHistoryFilter(combinations, recentDraws) {
-  // Grab the last 14 non-double/triple draws
+export function applyHistoryFilter(combinations, recentDraws, days = 14) {
+  // Grab the last 'days' non-double/triple draws
   const filterList = recentDraws
     .filter(draw => !isDoubleOrTriple(draw))
-    .slice(0, 14)
+    .slice(0, days)
     .map(normalizeDraw);
     
   const filterSet = new Set(filterList);
@@ -153,7 +153,7 @@ export function applyHistoryFilter(combinations, recentDraws) {
  * @returns {Object} Simulation results including timeline and summary stats
  */
 export function runBacktest(draws, config) {
-  const { lookbackWindow = 50, elimCount = 3, useHistoryFilter = true, wager = 1.00, payout = 80.00 } = config;
+  const { lookbackWindow = 50, elimCount = 3, useHistoryFilter = true, historyFilterDays = 14, wager = 1.00, payout = 80.00 } = config;
   
   let totalWins = 0;
   let totalLosses = 0;
@@ -179,7 +179,7 @@ export function runBacktest(draws, config) {
     let combinations = generateMasterList();
     combinations = eliminateCombinations(combinations, elims);
     if (useHistoryFilter) {
-      combinations = applyHistoryFilter(combinations, pastDraws);
+      combinations = applyHistoryFilter(combinations, pastDraws, historyFilterDays);
     }
     
     const cost = combinations.length * wager;
