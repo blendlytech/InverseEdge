@@ -5,11 +5,17 @@ export default function BacktestPanel({ draws }) {
   const [lookbackWindow, setLookbackWindow] = useState(50);
   const [elimCount, setElimCount] = useState(3);
   const [useHistoryFilter, setUseHistoryFilter] = useState(true);
+  const [drawFilter, setDrawFilter] = useState('All');
   const [results, setResults] = useState(null);
 
   const handleRunSimulation = () => {
-    if (!draws || draws.length < lookbackWindow + 1) {
-      alert(`Not enough data. You need at least ${lookbackWindow + 1} draws to run a backtest with a lookback of ${lookbackWindow}.`);
+    const filteredDraws = draws.filter(d => {
+      if (drawFilter === 'All') return true;
+      return d.date.includes(drawFilter);
+    });
+
+    if (!filteredDraws || filteredDraws.length < lookbackWindow + 1) {
+      alert(`Not enough data. You need at least ${lookbackWindow + 1} ${drawFilter} draws to run a backtest with a lookback of ${lookbackWindow}.`);
       return;
     }
 
@@ -21,7 +27,7 @@ export default function BacktestPanel({ draws }) {
       payout: 80.00
     };
 
-    const simResults = runBacktest(draws, config);
+    const simResults = runBacktest(filteredDraws, config);
     
     // The timeline is generated chronologically, so we reverse it to show newest at the top
     simResults.timeline.reverse();
@@ -69,6 +75,18 @@ export default function BacktestPanel({ draws }) {
           >
             <option value="yes">Enabled</option>
             <option value="no">Disabled</option>
+          </select>
+        </div>
+        <div className="input-group">
+          <label>Draw Filter</label>
+          <select 
+            className="custom-input" 
+            value={drawFilter} 
+            onChange={(e) => setDrawFilter(e.target.value)}
+          >
+            <option value="All">All Draws</option>
+            <option value="Midday">Midday Only</option>
+            <option value="Evening">Evening Only</option>
           </select>
         </div>
       </div>

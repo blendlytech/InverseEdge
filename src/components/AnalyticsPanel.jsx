@@ -3,13 +3,20 @@ import { calculateFrequencies, calculateGapTimes, getAIRecommendations } from '.
 
 export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimination, onSetEliminations }) {
   const [lookbackCount, setLookbackCount] = React.useState(50);
+  const [drawFilter, setDrawFilter] = React.useState('All');
   
+  // Filter draws by Midday/Evening
+  const filteredDraws = draws.filter(d => {
+    if (drawFilter === 'All') return true;
+    return d.date.includes(drawFilter);
+  });
+
   // Constrain lookback to actual available data
-  const maxDraws = draws.length;
+  const maxDraws = filteredDraws.length;
   const validLookback = Math.min(Math.max(1, lookbackCount || 1), maxDraws > 0 ? maxDraws : 50);
   
   // Extract just the draw strings for calculations, sliced by the lookback window
-  const drawStrings = draws.slice(0, validLookback).map(d => d.draw);
+  const drawStrings = filteredDraws.slice(0, validLookback).map(d => d.draw);
   
   // Calculate analytics
   const frequencies = calculateFrequencies(drawStrings);
@@ -23,7 +30,7 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
   const doubleFrequencies = {};
   const tripleFrequencies = {};
   
-  draws.slice(0, validLookback).forEach(d => {
+  filteredDraws.slice(0, validLookback).forEach(d => {
     const draw = d.draw;
     if (draw && draw.length === 3) {
       if (draw[0] === draw[1] && draw[1] === draw[2]) {
@@ -54,7 +61,32 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
 
   return (
     <div className="glass-card">
-      <h2 style={{ marginBottom: '8px' }} className="glow-text-secondary">AI Prediction Engine</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '8px' }}>
+        <h2 className="glow-text-secondary" style={{ margin: 0 }}>AI Prediction Engine</h2>
+        
+        {/* Midday/Evening Toggle */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button 
+            onClick={() => setDrawFilter('All')}
+            style={{ background: drawFilter === 'All' ? 'var(--primary)' : 'rgba(255,255,255,0.05)', border: 'none', color: drawFilter === 'All' ? '#000' : 'var(--text-muted)', padding: '6px 16px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', textTransform: 'uppercase', letterSpacing: '0.5px' }}
+          >
+            All
+          </button>
+          <button 
+            onClick={() => setDrawFilter('Midday')}
+            style={{ background: drawFilter === 'Midday' ? 'var(--primary)' : 'rgba(255,255,255,0.05)', border: 'none', color: drawFilter === 'Midday' ? '#000' : 'var(--text-muted)', padding: '6px 16px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', textTransform: 'uppercase', letterSpacing: '0.5px' }}
+          >
+            Midday
+          </button>
+          <button 
+            onClick={() => setDrawFilter('Evening')}
+            style={{ background: drawFilter === 'Evening' ? 'var(--primary)' : 'rgba(255,255,255,0.05)', border: 'none', color: drawFilter === 'Evening' ? '#000' : 'var(--text-muted)', padding: '6px 16px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', textTransform: 'uppercase', letterSpacing: '0.5px' }}
+          >
+            Evening
+          </button>
+        </div>
+      </div>
+
       <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         Analyzing occurrences over your last 
         <input 
