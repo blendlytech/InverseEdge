@@ -1,6 +1,7 @@
 # CLAUDE.md — InverseEdge Pick-3 Strategy App
 
 ## Project Purpose
+
 **InverseEdge** implements "The Inverse Method" — a Pick-3 lottery box elimination strategy.
 Core idea: eliminate the 2–4 coldest digits from the 120 non-repeating 3-digit combinations,
 play the surviving combos daily, and use gap analysis to rank the most overdue ones as top picks.
@@ -8,8 +9,9 @@ play the surviving combos daily, and use gap analysis to rank the most overdue o
 ---
 
 ## Tech Stack
+
 | Layer | Tool |
-|---|---|
+| --- | --- |
 | Build | Vite 8 (base: `'./'` for flexible deployment) |
 | UI | React 19 + JSX (no TypeScript) |
 | Charts | Recharts 3 |
@@ -24,7 +26,7 @@ No Redux, no Zustand, no CSS framework (Tailwind/Bootstrap). Pure React hooks + 
 
 ## File Map
 
-```
+```text
 src/
   main.jsx                  React entry point
   App.jsx                   Root (1,720 lines) — all top-level state, mock draw data, Supabase fetch
@@ -41,7 +43,7 @@ src/
     Tooltip.jsx             Reusable hover tooltip with directional arrow
 
   utils/
-    AIEngine.js             ALL combinatorics math (315 lines) — import functions from here; never duplicate logic
+    AIEngine.js             ALL combinatorics math (315 lines) — import from here; never duplicate logic
     supabaseClient.js       Supabase SDK init (credentials hardcoded — no .env.local)
     optimizer.worker.js     Web Worker — backtest parameter grid search; runs off-thread
 ```
@@ -53,16 +55,16 @@ src/
 All primary state lives in **App.jsx** (no global store):
 
 | State | Type | Persisted |
-|---|---|---|
+| --- | --- | --- |
 | `draws` | `Array<{date, draw}>` | Supabase (falls back to `DEFAULT_MOCK_DRAWS`) |
-| `eliminatedDigits` | `number[]` (0–4 items) | `localStorage` — key `"inverse_edge_eliminations"` |
-| `historyFilterDays` | `number` | `localStorage` — key `"inverse_edge_history_days"` |
+| `eliminatedDigits` | `number[]` (0–4 items) | `localStorage` key `"inverse_edge_eliminations"` |
+| `historyFilterDays` | `number` | `localStorage` key `"inverse_edge_history_days"` |
 | `activeTab` | `'heatmap' \| 'playgen' \| 'backtest' \| 'sync'` | None |
 | `isLoading` | `boolean` | None |
 
 Component-level state stays local. Only props needed by multiple panels get lifted to App.
 
-**Draw format:** `{ date: "YYYY-MM-DD Midday|Evening", draw: "NNN" }` — always a 3-digit string, newest-first in the array.
+**Draw format:** `{ date: "YYYY-MM-DD Midday|Evening", draw: "NNN" }` — always a 3-digit string, newest-first.
 
 ---
 
@@ -71,11 +73,11 @@ Component-level state stays local. Only props needed by multiple panels get lift
 Always import from `../utils/AIEngine`. Never reimplement these:
 
 | Function | Purpose |
-|---|---|
+| --- | --- |
 | `generateMasterList()` | 120 unique non-repeating combos (sorted digits, e.g. `"013"`) |
 | `eliminateCombinations(master, digits)` | Remove combos containing any eliminated digit |
 | `applyHistoryFilter(combos, draws, days)` | Remove combos drawn in the last N draws |
-| `scoreComboGaps(combos, draws, lookback)` | Rank combos by draws-since-last-box-hit; `lastHit=999` = never hit in window (overdue) |
+| `scoreComboGaps(combos, draws, lookback)` | Rank combos by draws-since-last-box-hit; `lastHit=999` = overdue |
 | `scoreStraightPermutations(combo, draws, lookback)` | Rank all 6 orderings of a combo by exact-hit recency |
 | `calculateFrequencies(draws)` | Per-digit occurrence counts (skips doubles/triples) |
 | `calculateGapTimes(draws)` | Draws since each digit (0–9) last appeared |
@@ -90,21 +92,23 @@ Always import from `../utils/AIEngine`. Never reimplement these:
 ## Styling System
 
 ### Design Tokens (index.css — ONLY place to change these)
+
 ```css
---bg-base: #080b11          /* Page background */
+--bg-base: #080b11              /* Page background */
 --bg-card: rgba(15,23,42,0.65) /* Glassmorphism card */
---primary: #10b981          /* Neon emerald — positive, active */
---secondary: #eab308        /* Gold — strategy labels */
---danger: #ef4444           /* Red — warnings, recent hits */
---text-main: #f8fafc        /* Body text */
---text-muted: #94a3b8       /* Labels, secondary text */
---font-mono: 'Roboto Mono'  /* ALL number/digit display */
+--primary: #10b981              /* Neon emerald — positive, active */
+--secondary: #eab308            /* Gold — strategy labels */
+--danger: #ef4444               /* Red — warnings, recent hits */
+--text-main: #f8fafc            /* Body text */
+--text-muted: #94a3b8           /* Labels, secondary text */
+--font-mono: 'Roboto Mono'      /* ALL number/digit display */
 --border-color: rgba(255,255,255,0.06)
 ```
 
 ### CSS Class Conventions
+
 | Class | Usage |
-|---|---|
+| --- | --- |
 | `.glass-card` | Every panel wrapper (backdrop-filter blur) |
 | `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-danger` | All buttons |
 | `.glow-text-primary` | Section headings |
@@ -113,6 +117,7 @@ Always import from `../utils/AIEngine`. Never reimplement these:
 | `.tab-btn`, `.tab-btn.active` | Tab navigation |
 
 ### Inline Style Conventions
+
 - All component-level layout uses **inline `style={{...}}`** — do not add CSS classes for one-off component styles
 - Use `var(--token)` for all colors, never raw hex inside components
 - Numbers and draws: always use `fontFamily: 'var(--font-mono)'`
@@ -121,14 +126,14 @@ Always import from `../utils/AIEngine`. Never reimplement these:
 
 ## Tooltip & HelpIcon Pattern
 
-Both are defined at the top of **PlayGeneratorPanel.jsx** and used site-wide in that file:
+Both are defined at the top of **PlayGeneratorPanel.jsx** and used throughout that file:
 
 ```jsx
 const HelpIcon = () => (
   <span style={{ cursor: 'help', color: 'var(--primary)', opacity: 0.8, ... }}>?</span>
 );
 
-// Usage — always wrap HelpIcon in Tooltip:
+// Always wrap HelpIcon in Tooltip:
 <Tooltip text="Explanation here." direction="down"><HelpIcon /></Tooltip>
 ```
 
@@ -149,6 +154,7 @@ Use `direction="down"` when the tooltip is near the top of a section to avoid cl
 8. **Wager calc**: `displayCount × wagerPerCombo` = cost; payout = `$80 × wagerPerCombo`
 
 **Strategy tiers** (by eliminated digit count):
+
 - 2 digits = Strategy 3 (recommended baseline)
 - 3 digits = Strategy 1 or 2 (best net profit)
 - 4 digits = Strategy 5 (aggressive reduction)
@@ -184,18 +190,21 @@ npm run lint      # ESLint (flat config)
 ## Common Task Patterns
 
 **Adding a new control to PlayGeneratorPanel:**
+
 1. Add `useState` hook near top of component
 2. Wire input in the relevant section (follow existing inline-style patterns)
 3. If it affects ranking, pass it to the relevant `AIEngine` function
 4. Add a `<Tooltip><HelpIcon /></Tooltip>` explaining the control
 
 **Adding a new AIEngine function:**
+
 - Export from `AIEngine.js`; import in the component that needs it
 - Skip doubles/triples using `isDoubleOrTriple(draw)`
 - Normalize combos with `normalizeDraw(draw)` before comparison
 - Always accept `lookback` as a param so the caller can control window size
 
 **Adding a new panel/tab:**
+
 - Create `src/components/NewPanel.jsx`
 - Add tab button in App.jsx tab bar
 - Add tab content render in App.jsx tab body
