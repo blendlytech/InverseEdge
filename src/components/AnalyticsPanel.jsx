@@ -9,7 +9,7 @@ const HelpIcon = () => (
 
 export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimination, onSetEliminations }) {
   const [lookbackType, setLookbackType] = React.useState('count'); // 'count' or 'date'
-  const [lookbackCount, setLookbackCount] = React.useState(50);
+  const [lookbackCount, setLookbackCount] = React.useState(14);
   const [startDate, setStartDate] = React.useState(() => {
     // Default to 14 days ago
     const d = new Date();

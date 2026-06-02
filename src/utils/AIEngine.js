@@ -224,3 +224,43 @@ export function runBacktest(draws, config) {
     timeline
   };
 }
+
+/**
+ * Generates all 6 exact-order permutations of a 3-digit combination.
+ * All master list combos have non-repeating digits, so there are always exactly 6.
+ * @param {string} combo A 3-digit combination (e.g. "345")
+ * @returns {string[]} All 6 orderings
+ */
+export function getPermutations(combo) {
+  const [a, b, c] = combo.split('');
+  return [
+    `${a}${b}${c}`, `${a}${c}${b}`,
+    `${b}${a}${c}`, `${b}${c}${a}`,
+    `${c}${a}${b}`, `${c}${b}${a}`
+  ];
+}
+
+/**
+ * Scores all 6 straight (exact-order) permutations of a box combination against recent draws.
+ * Returns them sorted most-overdue first to guide straight/exact betting selection.
+ * @param {string} combo Sorted box combo (e.g. "345")
+ * @param {string[]} draws Raw draw strings newest-first (e.g. ["543", "876", ...])
+ * @param {number} lookback How many recent draws to scan
+ * @returns {Array<{perm: string, lastHit: number, frequency: number}>}
+ */
+export function scoreStraightPermutations(combo, draws, lookback = 100) {
+  const perms = getPermutations(combo);
+  const recent = draws.slice(0, lookback);
+
+  return perms.map(perm => {
+    let lastHit = 999;
+    let frequency = 0;
+    for (let i = 0; i < recent.length; i++) {
+      if (recent[i] === perm) {
+        frequency++;
+        if (lastHit === 999) lastHit = i;
+      }
+    }
+    return { perm, lastHit, frequency };
+  }).sort((a, b) => b.lastHit - a.lastHit);
+}
