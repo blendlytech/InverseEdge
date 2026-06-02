@@ -69,16 +69,58 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
       </p>
 
       {/* Doubles / Triples Scoreboard */}
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '8px', flex: 1, textAlign: 'center', border: '1px solid var(--border-color)' }}>
+      <div style={{ display: 'flex', gap: '16px', marginBottom: showScoreboardDetails ? '16px' : '24px' }}>
+        <div 
+          onClick={() => setShowScoreboardDetails(showScoreboardDetails === 'doubles' ? null : 'doubles')}
+          style={{ background: showScoreboardDetails === 'doubles' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '8px', flex: 1, textAlign: 'center', border: showScoreboardDetails === 'doubles' ? '1px solid var(--primary)' : '1px solid var(--border-color)', cursor: 'pointer', transition: 'all 0.2s' }}
+        >
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Doubles</div>
           <div style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: '1' }}>{doubleCount}</div>
         </div>
-        <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '8px', flex: 1, textAlign: 'center', border: '1px solid var(--border-color)' }}>
+        <div 
+          onClick={() => setShowScoreboardDetails(showScoreboardDetails === 'triples' ? null : 'triples')}
+          style={{ background: showScoreboardDetails === 'triples' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '8px', flex: 1, textAlign: 'center', border: showScoreboardDetails === 'triples' ? '1px solid var(--primary)' : '1px solid var(--border-color)', cursor: 'pointer', transition: 'all 0.2s' }}
+        >
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Triples</div>
           <div style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: '1' }}>{tripleCount}</div>
         </div>
       </div>
+
+      {/* Expanded Details View */}
+      {showScoreboardDetails && (
+        <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', marginBottom: '24px', maxHeight: '240px', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h4 style={{ color: 'var(--text-main)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Detailed {showScoreboardDetails} History
+            </h4>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Showing {showScoreboardDetails === 'doubles' ? doubleCount : tripleCount} hits</span>
+          </div>
+          
+          {(showScoreboardDetails === 'doubles' ? doublesList : triplesList).length === 0 ? (
+            <p style={{fontSize: '12px', color: 'var(--text-muted)'}}>No {showScoreboardDetails} found in this range.</p>
+          ) : (
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {(showScoreboardDetails === 'doubles' ? doublesList : triplesList).map((d, i) => {
+                const freqMap = showScoreboardDetails === 'doubles' ? doubleFrequencies : tripleFrequencies;
+                const freq = freqMap[d.draw];
+                return (
+                  <li key={i} style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', paddingBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <span>{d.date}</span>
+                    <span>
+                      <strong style={{ color: 'var(--text-main)', fontSize: '13px', letterSpacing: '2px' }}>{d.draw}</strong> 
+                      {freq > 1 && (
+                        <span style={{ color: 'var(--primary)', marginLeft: '8px', fontSize: '10px', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                          Hit {freq}x
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* AI Recommendation Card */}
       <div style={{ 
