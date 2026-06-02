@@ -1289,7 +1289,16 @@ const monthMap = {
   'Dec.': '12'
 };
 
-const lines = rawNewData.split('\n');
+const octRaw = fs.readFileSync('scratch/october.txt', 'utf8');
+const septRaw = fs.readFileSync('scratch/september.txt', 'utf8');
+const augRaw = fs.readFileSync('scratch/august.txt', 'utf8');
+const julyRaw = fs.readFileSync('scratch/july.txt', 'utf8');
+const juneRaw = fs.readFileSync('scratch/june.txt', 'utf8');
+const mayRaw = fs.readFileSync('scratch/may.txt', 'utf8');
+const aprilRaw = fs.readFileSync('scratch/april.txt', 'utf8');
+const marchRaw = fs.readFileSync('scratch/march.txt', 'utf8');
+const febRaw = fs.readFileSync('scratch/february.txt', 'utf8');
+const lines = (rawNewData + '\n' + octRaw + '\n' + septRaw + '\n' + augRaw + '\n' + julyRaw + '\n' + juneRaw + '\n' + mayRaw + '\n' + aprilRaw + '\n' + marchRaw + '\n' + febRaw).split('\n');
 let currentDate = null;
 let currentType = null;
 
