@@ -29,24 +29,27 @@ No Redux, no Zustand, no CSS framework (Tailwind/Bootstrap). Pure React hooks + 
 ```text
 src/
   main.jsx                  React entry point
-  App.jsx                   Root (1,720 lines) — all top-level state, mock draw data, Supabase fetch
+  App.jsx                   Root — draws state, Supabase fetch, single-column layout
   index.css                 Global CSS design tokens (edit tokens here; never add a new token file)
   App.css                   Empty; ignore
 
   components/
-    AnalyticsPanel.jsx      Digit frequency + gap heatmap, AI cold-digit recommender, TemperatureChart host
-    PlayGeneratorPanel.jsx  Combination generator, Top Picks, Sniper Mode, Position Heat Map, Straight Analyzer
-    BacktestPanel.jsx       Historical simulation UI + Web Worker optimizer
-    HistoryPanel.jsx        Draw history table (read-only display)
-    SyncPanel.jsx           Supabase cloud sync + Base64 import/export
-    TemperatureChart.jsx    Recharts line chart — digit frequency over time
+    PlayGeneratorPanel.jsx  PRIMARY COMPONENT — the 120 master list, gap ranking, top picks, exact bet analyzer
+    HistoryPanel.jsx        Collapsible draw history table (shown below PlayGeneratorPanel)
     Tooltip.jsx             Reusable hover tooltip with directional arrow
 
   utils/
-    AIEngine.js             ALL combinatorics math (315 lines) — import from here; never duplicate logic
+    AIEngine.js             ALL combinatorics math — import from here; never duplicate logic
     supabaseClient.js       Supabase SDK init (credentials hardcoded — no .env.local)
-    optimizer.worker.js     Web Worker — backtest parameter grid search; runs off-thread
+    optimizer.worker.js     Web Worker — unused in current simplified version; kept for future use
 ```
+
+### Removed from active use (files still exist but are no longer imported)
+
+- `AnalyticsPanel.jsx` — digit heatmap + cold digit recommender (removed per client brief)
+- `BacktestPanel.jsx` — historical simulation (removed per client brief)
+- `SyncPanel.jsx` — cloud import/export (removed per client brief)
+- `TemperatureChart.jsx` — digit frequency chart (removed per client brief)
 
 ---
 
@@ -57,12 +60,19 @@ All primary state lives in **App.jsx** (no global store):
 | State | Type | Persisted |
 | --- | --- | --- |
 | `draws` | `Array<{date, draw}>` | Supabase (falls back to `DEFAULT_MOCK_DRAWS`) |
-| `eliminatedDigits` | `number[]` (0–4 items) | `localStorage` key `"inverse_edge_eliminations"` |
 | `historyFilterDays` | `number` | `localStorage` key `"inverse_edge_history_days"` |
-| `activeTab` | `'heatmap' \| 'playgen' \| 'backtest' \| 'sync'` | None |
+| `showHistory` | `boolean` | None (collapsible draw history panel) |
 | `isLoading` | `boolean` | None |
 
-Component-level state stays local. Only props needed by multiple panels get lifted to App.
+**PlayGeneratorPanel local state** (component-owned):
+
+| State | Default | Purpose |
+| --- | --- | --- |
+| `lookback` | `28` draws | How many recent draws to scan for gap ranking (~14 days) |
+| `selectedCombo` | `null` | Which combo tile is selected for exact-bet analysis |
+| `showRecentlyDrawn` | `false` | Toggle to show/hide excluded combos in the grid |
+
+Component-level state stays local. Only `historyFilterDays` is lifted to App because it persists to localStorage.
 
 **Draw format:** `{ date: "YYYY-MM-DD Midday|Evening", draw: "NNN" }` — always a 3-digit string, newest-first.
 
@@ -184,6 +194,8 @@ npm run lint      # ESLint (flat config)
 - The app is a **static SPA**; no server-side code, no API routes
 - `isDoubleOrTriple()` must gate every draw-analysis loop — doubles/triples are out of universe
 - `normalizeDraw()` must be applied before any combo comparison (sorts digits ascending)
+- **No digit elimination feature** — the app works on all 120 combos; the history filter and lookback window are the only user controls that narrow results
+- **Always add `<Tooltip><HelpIcon /></Tooltip>`** next to every user-facing control — client requires all features to be self-explanatory
 
 ---
 
@@ -192,9 +204,9 @@ npm run lint      # ESLint (flat config)
 **Adding a new control to PlayGeneratorPanel:**
 
 1. Add `useState` hook near top of component
-2. Wire input in the relevant section (follow existing inline-style patterns)
-3. If it affects ranking, pass it to the relevant `AIEngine` function
-4. Add a `<Tooltip><HelpIcon /></Tooltip>` explaining the control
+2. Add the control in the Settings row (or a new section), using existing inline-style patterns
+3. If it affects gap ranking, pass it to the relevant `AIEngine` function
+4. Add a `<Tooltip direction="down"><HelpIcon /></Tooltip>` explaining the control
 
 **Adding a new AIEngine function:**
 
@@ -203,9 +215,9 @@ npm run lint      # ESLint (flat config)
 - Normalize combos with `normalizeDraw(draw)` before comparison
 - Always accept `lookback` as a param so the caller can control window size
 
-**Adding a new panel/tab:**
+**Adding a new section below PlayGeneratorPanel:**
 
 - Create `src/components/NewPanel.jsx`
-- Add tab button in App.jsx tab bar
-- Add tab content render in App.jsx tab body
-- Pass `draws`, `eliminatedDigits`, and any needed callbacks as props
+- Import and render it in `App.jsx` inside the `<main>` flex column, below `<PlayGeneratorPanel>`
+- Pass `draws` and any needed callbacks as props
+- Do NOT add tabs — the app uses a single scrollable page layout

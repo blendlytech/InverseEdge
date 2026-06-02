@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react';
 import HistoryPanel from './components/HistoryPanel';
-import AnalyticsPanel from './components/AnalyticsPanel';
 import PlayGeneratorPanel from './components/PlayGeneratorPanel';
-import SyncPanel from './components/SyncPanel';
-import BacktestPanel from './components/BacktestPanel';
 import { supabase } from './utils/supabaseClient';
 // High-quality mock history (last 50 drawings)
 // Engineered to make 0, 1, 2 colder than average to showcase Strategy 1 alignment
@@ -1519,22 +1516,13 @@ const DEFAULT_MOCK_DRAWS = [
 export default function App() {
   const [draws, setDraws] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Load initial eliminated digits
-  const [eliminatedDigits, setEliminatedDigits] = useState(() => {
-    const saved = localStorage.getItem('inverse_edge_eliminations');
-    return saved ? JSON.parse(saved) : [0, 1, 2]; // Default matches Strategy 1 recommendation
-  });
+  const [showHistory, setShowHistory] = useState(false);
 
   const [historyFilterDays, setHistoryFilterDays] = useState(() => {
     const saved = localStorage.getItem('inverse_edge_history_days');
     return saved ? parseInt(saved, 10) : 14;
   });
 
-  // Load active right-side panel tab ('heatmap', 'playgen', 'sync')
-  const [activeTab, setActiveTab] = useState('heatmap');
-
-  // Fetch from Supabase
   const fetchDraws = async () => {
     setIsLoading(true);
     const { data, error } = await supabase
@@ -1550,169 +1538,84 @@ export default function App() {
         date: `${row.draw_date} ${row.draw_type}`,
         draw: row.draw_number
       }));
-      
-      // Merge and deduplicate (Cloud data takes precedence)
       const drawsMap = new Map();
       DEFAULT_MOCK_DRAWS.forEach(d => drawsMap.set(d.date, d.draw));
       formatted.forEach(d => drawsMap.set(d.date, d.draw));
-      
-      finalDraws = Array.from(drawsMap.entries()).map(([date, draw]) => ({ date, draw }));
-      // Sort descending (newest first)
-      finalDraws.sort((a, b) => b.date.localeCompare(a.date));
+      finalDraws = Array.from(drawsMap.entries())
+        .map(([date, draw]) => ({ date, draw }))
+        .sort((a, b) => b.date.localeCompare(a.date));
     }
-    
+
     setDraws(finalDraws);
     setIsLoading(false);
   };
 
-  useEffect(() => {
-    fetchDraws();
-  }, []);
-
-  // Save eliminations to localStorage on change
-  useEffect(() => {
-    localStorage.setItem('inverse_edge_eliminations', JSON.stringify(eliminatedDigits));
-  }, [eliminatedDigits]);
+  useEffect(() => { fetchDraws(); }, []);
 
   useEffect(() => {
     localStorage.setItem('inverse_edge_history_days', historyFilterDays);
   }, [historyFilterDays]);
 
-  // App handlers
-
-  const handleDeleteDraw = (indexToDelete) => {
-    setDraws((prev) => prev.filter((_, idx) => idx !== indexToDelete));
-  };
-
-  const handleImportHistory = (importedDraws) => {
-    setDraws(importedDraws);
-  };
-
-  const handleToggleElimination = (digit) => {
-    setEliminatedDigits((prev) => {
-      if (prev.includes(digit)) {
-        return prev.filter(d => d !== digit);
-      } else {
-        // Limit to 4 elements max to preserve system viability
-        if (prev.length >= 4) {
-          alert('⚠️ Strategy Limit: Eliminating more than 4 digits yields too few plays and is statistically unviable under system rules.');
-          return prev;
-        }
-        return [...prev, digit].sort((a, b) => a - b);
-      }
-    });
-  };
+  const handleDeleteDraw = idx => setDraws(prev => prev.filter((_, i) => i !== idx));
 
   return (
     <div className="container">
       <div className="ambient-glow"></div>
 
-      {/* Header section */}
-      <header style={{ textAlign: 'center', marginBottom: '32px', position: 'relative', zIndex: '2' }}>
+      <header style={{ textAlign: 'center', marginBottom: '32px', position: 'relative', zIndex: 2 }}>
         <h1
           className="glow-text-primary"
-          style={{
-            fontSize: '44px',
-            fontWeight: '800',
-            color: 'var(--text-main)',
-            marginBottom: '4px',
-            textTransform: 'uppercase',
-            letterSpacing: '1px'
-          }}
+          style={{ fontSize: '44px', fontWeight: '800', color: 'var(--text-main)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '1px' }}
         >
           Inverse<span style={{ color: 'var(--primary)' }}>Edge</span>
         </h1>
         <p style={{ fontSize: '15px', color: 'var(--text-muted)', fontWeight: '500' }}>
-          Pick-3 Algorithmic Elimination Strategy Engine
+          The 120-Combination Pick-3 Strategy System
         </p>
       </header>
 
-      {/* Main Dashboard Layout */}
       {isLoading && (
         <div style={{ textAlign: 'center', color: 'var(--primary)', marginBottom: '16px', fontSize: '14px' }}>
-          🔄 Syncing history database...
+          🔄 Loading draw history...
         </div>
       )}
-      <main className="dashboard-grid" style={{ opacity: isLoading ? 0.6 : 1, transition: 'opacity 0.3s' }}>
-        {/* Left Column: Data Entry */}
-        <section style={{ position: 'relative', zIndex: '2' }}>
-          <HistoryPanel
-            draws={draws}
-            onDeleteDraw={handleDeleteDraw}
-          />
-        </section>
 
-        {/* Right Column: Analytics & Execution */}
-        <section className="sub-grid-right" style={{ position: 'relative', zIndex: '2' }}>
-          {/* Header tabs navigation */}
-          <div className="tab-header">
-            <button
-              className={`tab-btn ${activeTab === 'heatmap' ? 'active' : ''}`}
-              onClick={() => setActiveTab('heatmap')}
-            >
-              📊 AI Predictor & Heatmap
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'playgen' ? 'active' : ''}`}
-              onClick={() => setActiveTab('playgen')}
-            >
-              🎯 Combination Generator
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'backtest' ? 'active' : ''}`}
-              onClick={() => setActiveTab('backtest')}
-            >
-              ⏳ Time Machine
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'sync' ? 'active' : ''}`}
-              onClick={() => setActiveTab('sync')}
-            >
-              🔄 Sync & Backup
-            </button>
-          </div>
+      <main style={{
+        maxWidth: '920px', margin: '0 auto',
+        display: 'flex', flexDirection: 'column', gap: '24px',
+        position: 'relative', zIndex: 2,
+        opacity: isLoading ? 0.6 : 1, transition: 'opacity 0.3s'
+      }}>
+        <PlayGeneratorPanel
+          draws={draws}
+          historyFilterDays={historyFilterDays}
+          setHistoryFilterDays={setHistoryFilterDays}
+        />
 
-          {/* Active Tab Panel */}
-          {activeTab === 'heatmap' && (
-            <AnalyticsPanel
-              draws={draws}
-              eliminatedDigits={eliminatedDigits}
-              onToggleElimination={handleToggleElimination}
-              onSetEliminations={setEliminatedDigits}
-            />
+        {/* Collapsible draw history */}
+        <div className="glass-card" style={{ padding: '14px 18px' }}>
+          <button
+            onClick={() => setShowHistory(v => !v)}
+            style={{ background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', width: '100%', fontWeight: '600', padding: 0 }}
+          >
+            📋 Draw History
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal' }}>
+              ({draws.length} draws loaded)
+            </span>
+            <span style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--text-muted)' }}>
+              {showHistory ? '▲ Hide' : '▼ Show'}
+            </span>
+          </button>
+          {showHistory && (
+            <div style={{ marginTop: '14px' }}>
+              <HistoryPanel draws={draws} onDeleteDraw={handleDeleteDraw} />
+            </div>
           )}
-
-          {activeTab === 'playgen' && (
-            <PlayGeneratorPanel
-              draws={draws}
-              eliminatedDigits={eliminatedDigits}
-              historyFilterDays={historyFilterDays}
-              setHistoryFilterDays={setHistoryFilterDays}
-            />
-          )}
-
-          {activeTab === 'backtest' && (
-            <BacktestPanel
-              draws={draws}
-              initialHistoryFilterDays={historyFilterDays}
-            />
-          )}
-
-          {activeTab === 'sync' && (
-            <SyncPanel
-              draws={draws}
-              onImportHistory={handleImportHistory}
-              onCloudSync={fetchDraws}
-              isLoading={isLoading}
-            />
-          )}
-        </section>
+        </div>
       </main>
 
-      {/* Footer footer */}
       <footer style={{ marginTop: '48px', padding: '16px 0', borderTop: '1px solid var(--border-color)', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
-        <p>© 2026 InverseEdge Pick-3 Engine. Automated under license rules of The Inverse Method.</p>
-        <p style={{ marginTop: '4px' }}>Please gamble responsibly.</p>
+        <p>© 2026 InverseEdge. The 120-Combination Pick-3 Strategy. Please gamble responsibly.</p>
       </footer>
     </div>
   );

@@ -1,467 +1,382 @@
 import { useState } from 'react';
 import {
   generateMasterList,
-  eliminateCombinations,
-  applyHistoryFilter,
   normalizeDraw,
   isDoubleOrTriple,
   scoreStraightPermutations,
   scoreComboGaps,
-  getPositionFrequencies
 } from '../utils/AIEngine';
 import Tooltip from './Tooltip';
 
 const HelpIcon = () => (
-  <span style={{ cursor: 'help', color: 'var(--primary)', opacity: 0.8, fontSize: '12px', marginLeft: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', border: '1px solid var(--primary)', borderRadius: '50%', fontWeight: 'bold' }}>?</span>
+  <span style={{
+    cursor: 'help', color: 'var(--primary)', opacity: 0.8,
+    fontSize: '11px', marginLeft: '5px', flexShrink: 0,
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    width: '15px', height: '15px',
+    border: '1px solid var(--primary)', borderRadius: '50%', fontWeight: 'bold',
+  }}>?</span>
 );
 
-export default function PlayGeneratorPanel({ draws, eliminatedDigits, historyFilterDays = 14, setHistoryFilterDays }) {
-  const [showOnlyFiltered, setShowOnlyFiltered] = useState(true);
+const LOOKBACK_PRESETS = [
+  { label: '7 days', draws: 14 },
+  { label: '14 days', draws: 28 },
+  { label: '30 days', draws: 60 },
+  { label: '60 days', draws: 120 },
+];
+
+export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistoryFilterDays }) {
+  const [lookback, setLookback] = useState(28);
   const [selectedCombo, setSelectedCombo] = useState(null);
-  const [straightLookback, setStraightLookback] = useState(14);
-  const [sniperMode, setSniperMode] = useState(false);
-  const [sniperCount, setSniperCount] = useState(5);
-  const [comboLookback, setComboLookback] = useState(200);
-  const [showPositionMap, setShowPositionMap] = useState(true);
-  const [wagerPerCombo, setWagerPerCombo] = useState(1.00);
+  const [showRecentlyDrawn, setShowRecentlyDrawn] = useState(false);
 
-  // ── Core 120 Master List pipeline ──────────────────────────────
-  const masterList = generateMasterList();
-  const baseCombinations = eliminateCombinations(masterList, eliminatedDigits);
   const drawStrings = draws.map(d => d.draw);
-  const filteredCombinations = applyHistoryFilter(baseCombinations, drawStrings, historyFilterDays);
+  const masterList = generateMasterList();
 
-  // Combo-level overdue ranking (powers Top Picks, Sniper Mode, gap badges)
-  const filteredScored = scoreComboGaps(filteredCombinations, drawStrings, comboLookback);
-  const comboGapMap = new Map(filteredScored.map(s => [s.combo, s]));
-  const sniperSet = new Set(filteredScored.slice(0, sniperCount).map(s => s.combo));
+  // Score all 120 by gap (draws since last box hit within the lookback window)
+  const scored = scoreComboGaps(masterList, drawStrings, lookback);
+  const gapMap = new Map(scored.map(s => [s.combo, s]));
 
-  // Daily Top Picks: 3 most overdue combos each with their best straight ordering
-  const topPicks = filteredScored.slice(0, 3).map(({ combo, lastHit, frequency }) => {
-    const perms = scoreStraightPermutations(combo, drawStrings, straightLookback);
-    return { combo, lastHit, frequency, bestStraight: perms[0].perm, straightLastHit: perms[0].lastHit };
-  });
-
-  // Position frequency heat map data
-  const positionFreqs = getPositionFrequencies(drawStrings, historyFilterDays || 14);
-
-  // Straight permutation analysis for the selected combo
-  const straightPerms = selectedCombo
-    ? scoreStraightPermutations(selectedCombo, drawStrings, straightLookback)
-    : [];
-
-  // Recently drawn combos (for history filter badge marking)
-  const lastDrawsStandardized = new Set(
+  // Combos drawn in the history filter window — exclude from play sheet
+  const recentlyDrawn = new Set(
     drawStrings
-      .filter(draw => !isDoubleOrTriple(draw))
+      .filter(d => !isDoubleOrTriple(d))
       .slice(0, historyFilterDays)
       .map(normalizeDraw)
   );
 
-  // Stats
-  const totalCombos = baseCombinations.length;
-  const activeCombos = filteredCombinations.length;
-  const filteredCount = totalCombos - activeCombos;
-  const displayCount = sniperMode ? Math.min(sniperCount, activeCombos) : activeCombos;
-  const totalInvestment = displayCount * wagerPerCombo;
-  const expectedPayout = 80.00 * wagerPerCombo;
-  const netProfit = expectedPayout - totalInvestment;
+  const activeCombos = masterList.filter(c => !recentlyDrawn.has(c));
+  const excludedCount = masterList.length - activeCombos.length;
 
-  const handleCopy = () => {
-    const list = sniperMode
-      ? filteredScored.slice(0, sniperCount).map(s => s.combo)
-      : filteredCombinations;
-    if (list.length === 0) return;
-    navigator.clipboard.writeText(list.join(', '));
-    alert('📋 Play list copied to clipboard!');
-  };
+  // Top 3 picks: most overdue among active combos
+  const scoredActive = scored.filter(s => !recentlyDrawn.has(s.combo));
+  const topPicks = scoredActive.slice(0, 3).map(({ combo, lastHit }) => ({
+    combo,
+    lastHit,
+    perms: scoreStraightPermutations(combo, drawStrings, lookback),
+  }));
 
-  const handleCopyTopPicks = () => {
-    if (topPicks.length === 0) return;
-    const text = topPicks.map((p, i) => `#${i + 1}: ${p.bestStraight} straight / ${p.combo} box`).join('\n');
-    navigator.clipboard.writeText(text);
-    alert('📋 Top picks copied!');
-  };
+  // Exact orderings for selected combo
+  const straightPerms = selectedCombo
+    ? scoreStraightPermutations(selectedCombo, drawStrings, lookback)
+    : [];
 
   return (
     <div className="glass-card">
-      <h2 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center' }} className="glow-text-primary">
-        Optimized Combinations Generator
-        <Tooltip text="Locked to the 120-combination non-repeating Master List. Includes Daily Top Picks, Sniper Mode to focus on the most overdue combos, a Position Heat Map for exact bet targeting, and per-combo gap tracking."><HelpIcon /></Tooltip>
-      </h2>
 
-      {eliminatedDigits.length === 0 ? (
-        <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '40px', marginBottom: '12px' }}>🎯</div>
-          <h3>Select cold digits to generate your plays</h3>
-          <p style={{ fontSize: '13px', marginTop: '6px' }}>
-            Use the AI Cold Digit Recommender or tap digits in the interactive heatmap above to see play sheets.
-          </p>
+      {/* ── HEADER ─────────────────────────────────────────────────────── */}
+      <div style={{ marginBottom: '20px' }}>
+        <h2 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }} className="glow-text-primary">
+          The 120-Combination System
+          <Tooltip text="Pick-3 has 1,000 possible outcomes (000–999). Remove all doubles (112, 334…) and triples (111, 999…) and only 120 combinations remain — where all 3 digits are different. Research shows every non-double, non-triple drawing lands on this master list. That shrinks your universe from 1-in-1,000 to 1-in-120 — like stacking the deck in your favor.">
+            <HelpIcon />
+          </Tooltip>
+        </h2>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.6', margin: 0 }}>
+          Every non-double, non-triple Pick-3 result lands on this list. Find which combinations are most overdue, then bet the most overdue <strong style={{ color: 'var(--text-main)' }}>exact ordering</strong> for the highest payout.
+        </p>
+      </div>
+
+      {/* ── SETTINGS ───────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center',
+        padding: '12px 16px', marginBottom: '20px',
+        background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '10px',
+      }}>
+
+        {/* Lookback */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+            Scan last
+            <Tooltip direction="down" text="How many recent drawings to look back when checking if a combination is overdue. 14 days = 28 draws (twice daily). Smaller windows focus on very recent patterns. Larger windows reveal longer-term overdue combos. Start with 14 days — adjust based on what patterns you're seeing.">
+              <HelpIcon />
+            </Tooltip>:
+          </span>
+          {LOOKBACK_PRESETS.map(({ label, draws: d }) => (
+            <button
+              key={label}
+              onClick={() => setLookback(d)}
+              style={{
+                padding: '4px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
+                border: `1px solid ${lookback === d ? 'var(--primary)' : 'var(--border-color)'}`,
+                background: lookback === d ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.03)',
+                color: lookback === d ? 'var(--primary)' : 'var(--text-muted)',
+                fontWeight: lookback === d ? '600' : 'normal',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+          <input
+            type="number" min="7" max="500" value={lookback}
+            onChange={e => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v > 0) setLookback(v); }}
+            style={{ width: '55px', padding: '4px 6px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', fontSize: '12px' }}
+          />
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>draws (~2/day)</span>
         </div>
-      ) : (
-        <div>
-          {/* Active Strategy Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px' }}>
-            <div>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase' }}>Active Strategy</span>
-              <strong style={{ fontSize: '16px', color: 'var(--secondary)' }}>
-                {eliminatedDigits.length === 3 ? 'Strategy 1/2: ' : ''}
-                {eliminatedDigits.length === 2 ? 'Strategy 3: ' : ''}
-                {eliminatedDigits.length === 1 ? 'Strategy 4: ' : ''}
-                {eliminatedDigits.length === 4 ? 'Strategy 5: ' : ''}
-                {eliminatedDigits.length}-Digit Elimination ({10 - eliminatedDigits.length} remaining)
-              </strong>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block' }}>Eliminated Digits</span>
-              <strong style={{ fontSize: '16px', color: 'var(--danger)', fontFamily: 'var(--font-mono)' }}>
-                {eliminatedDigits.map(String).join(', ')}
-              </strong>
-            </div>
+
+        {/* History filter */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+            Exclude last
+            <Tooltip direction="down" text="Combinations drawn in this many recent drawings are unlikely to repeat so soon — remove them from your play sheet to cut cost and improve odds. Default 14 draws ≈ 1 week of drawings. Set to 0 to disable.">
+              <HelpIcon />
+            </Tooltip>:
+          </span>
+          <input
+            type="number" min="0" max="100" value={historyFilterDays}
+            onChange={e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) setHistoryFilterDays(v); }}
+            style={{ width: '52px', padding: '4px 6px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', fontSize: '12px' }}
+          />
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>draws</span>
+        </div>
+      </div>
+
+      {/* ── STATS BAR ──────────────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '20px' }}>
+        {[
+          { label: 'Total Master List', value: '120', color: 'var(--text-main)', note: 'non-repeating combos' },
+          { label: 'Recently Drawn', value: excludedCount, color: 'var(--danger)', note: 'excluded from play sheet' },
+          { label: 'Active Today', value: activeCombos.length, color: 'var(--primary)', note: 'ready to play' },
+        ].map(({ label, value, color, note }) => (
+          <div key={label} style={{ textAlign: 'center', padding: '10px 8px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+            <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{label}</div>
+            <div style={{ fontSize: '26px', fontFamily: 'var(--font-mono)', fontWeight: 'bold', color, lineHeight: 1 }}>{value}</div>
+            <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px' }}>{note}</div>
           </div>
+        ))}
+      </div>
 
-          {eliminatedDigits.length === 1 && (
-            <div style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '12px', marginBottom: '20px', fontSize: '13px', color: 'var(--danger)' }}>
-              ⚠️ <strong>Not Recommended:</strong> Strategy 4 (Single-Digit Elimination) yields a significantly lower net profit margin. Two-digit, three-digit, or four-digit eliminations provide a much better risk-to-reward ratio.
-            </div>
-          )}
+      {/* ── TODAY'S TOP PICKS ──────────────────────────────────────────── */}
+      {topPicks.length > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(6,182,212,0.04))',
+          border: '1px solid rgba(16,185,129,0.3)', borderRadius: '12px',
+          padding: '16px', marginBottom: '24px',
+        }}>
+          <h3 style={{ color: 'var(--primary)', fontSize: '14px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '14px', display: 'flex', alignItems: 'center' }}>
+            🏆 Today's Top Picks
+            <Tooltip text="The 3 most overdue combinations from the active list — they haven't appeared as a box hit in the longest time. For each pick you'll see ALL 6 exact orderings ranked most-overdue first. ★ OVERDUE = that exact number has never appeared in your scan window — your highest-value straight bet.">
+              <HelpIcon />
+            </Tooltip>
+          </h3>
 
-          {/* ── Wager Settings ─────────────────────────────────────────── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '13px', color: 'var(--text-muted)', flexShrink: 0, marginRight: '2px' }}>Wager per combo:</span>
-            {[0.25, 0.50, 1.00, 2.00].map(amt => (
-              <button
-                key={amt}
-                onClick={() => setWagerPerCombo(amt)}
-                style={{ padding: '4px 10px', borderRadius: '6px', border: `1px solid ${wagerPerCombo === amt ? 'var(--primary)' : 'var(--border-color)'}`, background: wagerPerCombo === amt ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.03)', color: wagerPerCombo === amt ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', fontSize: '13px', fontWeight: wagerPerCombo === amt ? '600' : 'normal', fontFamily: 'var(--font-mono)' }}
-              >
-                ${amt.toFixed(2)}
-              </button>
-            ))}
-            <input
-              type="number" min="0.25" max="10" step="0.25" value={wagerPerCombo}
-              onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v) && v > 0) setWagerPerCombo(parseFloat(v.toFixed(2))); }}
-              style={{ width: '64px', padding: '4px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', fontSize: '13px' }}
-            />
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '4px' }}>
-              → spend <strong style={{ color: 'var(--text-main)' }}>${totalInvestment.toFixed(2)}</strong> · win <strong style={{ color: 'var(--primary)' }}>${expectedPayout.toFixed(2)}</strong> · net <strong style={{ color: netProfit >= 0 ? 'var(--primary)' : 'var(--danger)' }}>${netProfit.toFixed(2)}</strong>
-            </span>
-          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px' }}>
+            {topPicks.map(({ combo, lastHit, perms }, pickIdx) => (
+              <div key={combo} style={{
+                background: pickIdx === 0 ? 'rgba(16,185,129,0.08)' : 'rgba(0,0,0,0.25)',
+                border: pickIdx === 0 ? '1px solid rgba(16,185,129,0.35)' : '1px solid rgba(255,255,255,0.07)',
+                borderRadius: '10px', padding: '14px',
+              }}>
 
-          {/* ── TODAY'S TOP PICKS ──────────────────────────────────────── */}
-          {filteredCombinations.length > 0 && (
-            <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(6,182,212,0.04))', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '12px', padding: '14px', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                  <h3 style={{ color: 'var(--primary)', fontSize: '14px', margin: 0, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    🏆 Today's Top Picks
-                  </h3>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    Gap window:
-                    <Tooltip direction="down" text="How many recent draws to scan when ranking combos by overdue status. Default 200 balances history depth with relevance. Lower (50–100) = recent-pattern focus, so more combos appear overdue. Higher (300–500) = broader view, only truly long-absent combos surface as overdue. Powers the overdue badges, Top Picks, and Sniper Mode."><HelpIcon /></Tooltip>
-                    <input
-                      type="number" min="20" max="999" value={comboLookback}
-                      onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v > 0) setComboLookback(v); }}
-                      style={{ width: '50px', padding: '2px 5px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', fontSize: '11px' }}
-                    />
-                    draws
-                  </span>
-                </div>
-                <button onClick={handleCopyTopPicks} className="btn btn-secondary btn-small" style={{ fontSize: '11px', padding: '5px 10px' }}>
-                  📋 Copy All 3 Picks
-                </button>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(topPicks.length, 3)}, 1fr)`, gap: '8px' }}>
-                {topPicks.map(({ combo, lastHit, bestStraight, straightLastHit }, idx) => (
-                  <div key={combo} style={{ textAlign: 'center', background: idx === 0 ? 'rgba(16,185,129,0.1)' : 'rgba(0,0,0,0.25)', border: idx === 0 ? '1px solid rgba(16,185,129,0.4)' : '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', padding: '12px 8px' }}>
-                    <div style={{ fontSize: '10px', color: idx === 0 ? 'var(--primary)' : 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
-                      #{idx + 1} Pick
+                {/* Pick header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                  <div>
+                    <div style={{ fontSize: '10px', color: pickIdx === 0 ? 'var(--primary)' : 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
+                      #{pickIdx + 1} Pick — Box Bet
                     </div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '20px', fontWeight: 'bold', color: 'var(--text-main)', letterSpacing: '2px' }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '32px', fontWeight: 'bold', color: 'var(--text-main)', letterSpacing: '5px', lineHeight: 1 }}>
                       {combo}
                     </div>
-                    <div style={{ fontSize: '9px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                      Box: {lastHit === 999
-                        ? <span style={{ color: 'var(--primary)' }}>OVERDUE</span>
-                        : `${lastHit} draws ago`}
+                    <div style={{ fontSize: '11px', marginTop: '4px', color: lastHit === 999 ? 'var(--primary)' : 'var(--text-muted)', fontWeight: lastHit === 999 ? '600' : 'normal' }}>
+                      Box overdue: {lastHit === 999 ? '∞ draws — OVERDUE' : `${lastHit} draws ago`}
                     </div>
-                    <div style={{ margin: '8px 0 4px', height: '1px', background: 'rgba(255,255,255,0.06)' }} />
-                    <div style={{ fontSize: '9px', color: 'var(--text-muted)', marginBottom: '2px' }}>Best Straight</div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', fontWeight: 'bold', color: 'var(--primary)', letterSpacing: '3px' }}>
-                      {bestStraight}
-                    </div>
-                    <div style={{ fontSize: '9px', marginTop: '2px', color: straightLastHit === 999 ? 'var(--primary)' : 'var(--text-muted)', fontWeight: straightLastHit === 999 ? '600' : 'normal' }}>
-                      {straightLastHit === 999 ? '★ Never hit exact' : `${straightLastHit} draws ago`}
-                    </div>
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(`${bestStraight} / ${combo}`); alert(`📋 ${bestStraight} (box: ${combo}) copied!`); }}
-                      style={{ marginTop: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', width: '100%' }}
-                    >
-                      📋 Copy
-                    </button>
                   </div>
-                ))}
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(combo); alert(`📋 ${combo} (box) copied!`); }}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', padding: '4px 8px', borderRadius: '5px', cursor: 'pointer', fontSize: '10px', flexShrink: 0 }}
+                  >
+                    📋 Copy Box
+                  </button>
+                </div>
+
+                {/* Section label */}
+                <div style={{ display: 'flex', alignItems: 'center', fontSize: '10px', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '8px' }}>
+                  All 6 Exact Orderings — Most Overdue First
+                  <Tooltip direction="down" text="Every combination can be drawn in 6 different exact orders. These are sorted from most overdue (★) to most recently hit. Bet the ★ OVERDUE ordering as a straight bet for the highest payout (~$250 on $0.50). Combine with a box bet for full coverage.">
+                    <HelpIcon />
+                  </Tooltip>
+                </div>
+
+                {/* All 6 exact orderings */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
+                  {perms.map(({ perm, lastHit: ph }) => {
+                    const isOverdue = ph === 999;
+                    const isHot = !isOverdue && ph <= 10;
+                    return (
+                      <div key={perm} style={{
+                        textAlign: 'center', padding: '7px 4px', borderRadius: '6px',
+                        background: isOverdue ? 'rgba(16,185,129,0.12)' : isHot ? 'rgba(239,68,68,0.07)' : 'rgba(0,0,0,0.2)',
+                        border: `1px solid ${isOverdue ? 'rgba(16,185,129,0.45)' : isHot ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.05)'}`,
+                      }}>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '15px', fontWeight: 'bold', color: isOverdue ? 'var(--primary)' : 'var(--text-main)', letterSpacing: '2px' }}>
+                          {perm}
+                        </div>
+                        <div style={{ fontSize: '8px', marginTop: '2px', color: isOverdue ? 'var(--primary)' : isHot ? 'var(--danger)' : 'var(--text-muted)', fontWeight: isOverdue ? '700' : 'normal' }}>
+                          {isOverdue ? '★ OVERDUE' : isHot ? `⚡ ${ph}d ago` : `${ph}d ago`}
+                        </div>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(perm); alert(`📋 ${perm} (exact) copied!`); }}
+                          style={{ marginTop: '3px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '9px', padding: '1px 4px' }}
+                        >
+                          📋
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Bet tip */}
+                <div style={{ marginTop: '10px', fontSize: '10px', color: 'var(--text-muted)', lineHeight: '1.5', padding: '7px 9px', background: 'rgba(0,0,0,0.2)', borderRadius: '5px' }}>
+                  💡 Play <strong style={{ color: 'var(--text-main)' }}>{combo}</strong> as <strong>$0.50 box</strong> (any order) + the <strong style={{ color: 'var(--primary)' }}>★ overdue</strong> ordering as <strong>$0.50 straight</strong> (exact). $1 total — doubles your money on box, ~250× on exact.
+                </div>
               </div>
-
-              <p style={{ marginTop: '10px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                💰 ${wagerPerCombo.toFixed(2)}/combo × {topPicks.length} picks = <strong style={{ color: 'var(--text-main)' }}>${(topPicks.length * wagerPerCombo).toFixed(2)}</strong> box total. Add an equal straight bet on each "Best Straight" for additional exact-win upside. Adjust the wager above to match your budget.
-              </p>
-            </div>
-          )}
-
-          {/* Profit margins */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '24px' }}>
-            <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sniperMode ? 'Sniper Picks' : 'Tickets to Buy'}</span>
-              <h3 style={{ fontSize: '22px', color: sniperMode ? 'var(--primary)' : 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>{displayCount}</h3>
-              {sniperMode && <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>of {activeCombos} active</span>}
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Daily Cost (${wagerPerCombo.toFixed(2)}/ea)</span>
-              <h3 style={{ fontSize: '22px', color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>${totalInvestment.toFixed(2)}</h3>
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Expected Payout</span>
-              <h3 style={{ fontSize: '22px', color: 'var(--primary)', fontFamily: 'var(--font-mono)' }}>${expectedPayout.toFixed(2)}</h3>
-            </div>
-            <div style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
-              <span style={{ fontSize: '11px', color: 'var(--primary)' }}>Net Profit on Win</span>
-              <h3 style={{ fontSize: '22px', color: 'var(--primary)', fontFamily: 'var(--font-mono)' }}>${netProfit.toFixed(2)}</h3>
-            </div>
+            ))}
           </div>
+        </div>
+      )}
 
-          {filteredCount > 0 && (
-            <div style={{ background: 'rgba(234,179,8,0.05)', border: '1px solid rgba(234,179,8,0.15)', borderRadius: '8px', padding: '12px', marginBottom: '20px', fontSize: '13px', color: 'var(--text-main)' }}>
-              🔥 <strong>History Filter Advantage<Tooltip text={`Combinations drawn in the last ${historyFilterDays} draws are statistically unlikely to repeat so soon.`}><HelpIcon /></Tooltip>:</strong> Removed <strong>{filteredCount} combinations</strong> matching the last {historyFilterDays} draws — saved ${filteredCount.toFixed(2)}, net profit up to <strong>${netProfit.toFixed(2)}</strong>!
-            </div>
-          )}
+      {/* ── THE 120 MASTER LIST ─────────────────────────────────────────── */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+          <h3 style={{ fontSize: '14px', color: 'var(--text-main)', margin: 0, display: 'flex', alignItems: 'center', fontWeight: '700' }}>
+            📋 The 120-Combination Master List
+            <Tooltip text="All 120 Pick-3 combinations where all 3 digits are different. The number under each combo = how many draws ago it last appeared as a box hit within your scan window. ∞ = hasn't hit in the scan window (most overdue). Red number = hit recently. Grayed-out = excluded by your history filter. Click any combo for full exact-order analysis.">
+              <HelpIcon />
+            </Tooltip>
+          </h3>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+              <input
+                type="checkbox" checked={showRecentlyDrawn}
+                onChange={e => setShowRecentlyDrawn(e.target.checked)}
+                style={{ accentColor: 'var(--primary)' }}
+              />
+              Show excluded
+            </label>
+            <button
+              onClick={() => { navigator.clipboard.writeText(activeCombos.join(', ')); alert(`📋 ${activeCombos.length} active combos copied!`); }}
+              className="btn btn-secondary btn-small"
+              style={{ fontSize: '11px', padding: '5px 10px' }}
+            >
+              📋 Copy Active List
+            </button>
+          </div>
+        </div>
 
-          {/* Controls */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-muted)' }}>
-                History Filter:
-                <input
-                  type="number" min="0" max="100" value={historyFilterDays}
-                  onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) setHistoryFilterDays(v); }}
-                  style={{ width: '48px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', padding: '4px 6px' }}
-                />
-                draws
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <input
-                  type="checkbox" checked={showOnlyFiltered}
-                  onChange={(e) => setShowOnlyFiltered(e.target.checked)}
-                  style={{ accentColor: 'var(--primary)', width: '14px', height: '14px' }}
-                />
-                Hide crossed-out
-              </label>
-            </div>
-            <button onClick={handleCopy} className="btn btn-secondary btn-small" style={{ fontSize: '12px', padding: '6px 12px' }}>
-              📋 Copy Play List
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px', lineHeight: '1.6' }}>
+          <span style={{ color: 'var(--primary)', fontWeight: '600' }}>∞</span> = overdue (not seen in scan window) &nbsp;·&nbsp;
+          <span style={{ color: 'var(--danger)', fontWeight: '600' }}>red</span> = appeared recently &nbsp;·&nbsp;
+          <span style={{ color: 'var(--text-main)' }}>click any combo</span> for exact ordering analysis
+        </div>
+
+        <div className="comb-list-container">
+          {masterList.map(combo => {
+            const isExcluded = recentlyDrawn.has(combo);
+            if (isExcluded && !showRecentlyDrawn) return null;
+            const isSelected = selectedCombo === combo;
+            const gap = gapMap.get(combo);
+            const isOverdue = gap?.lastHit === 999;
+            const isHot = !isOverdue && gap?.lastHit <= 10;
+
+            return (
+              <div
+                key={combo}
+                className={`comb-badge ${isExcluded ? 'filtered' : ''}`}
+                title={isExcluded ? 'Recently drawn — excluded from play sheet' : 'Click to analyze all 6 exact orderings'}
+                onClick={() => { if (!isExcluded) setSelectedCombo(isSelected ? null : combo); }}
+                style={{
+                  cursor: isExcluded ? 'default' : 'pointer',
+                  display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  ...(isSelected ? { borderColor: 'var(--primary)', boxShadow: '0 0 8px rgba(16,185,129,0.5)', color: 'var(--primary)' } : {}),
+                }}
+              >
+                <span>{combo}</span>
+                {gap && (
+                  <span style={{
+                    display: 'block', fontSize: '8px', marginTop: '1px', lineHeight: 1,
+                    fontFamily: 'var(--font-mono)',
+                    color: isOverdue ? 'var(--primary)' : isHot ? 'var(--danger)' : 'rgba(255,255,255,0.3)',
+                    opacity: isExcluded ? 0.4 : 1,
+                  }}>
+                    {isOverdue ? '∞' : `${gap.lastHit}d`}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── EXACT BET ANALYZER ─────────────────────────────────────────── */}
+      {selectedCombo && (
+        <div style={{ marginTop: '24px', background: 'rgba(16,185,129,0.03)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '12px', padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+            <h3 style={{ color: 'var(--primary)', fontSize: '15px', margin: 0, display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              🎯 Exact Bet Analyzer
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '22px', color: 'var(--text-main)', background: 'rgba(255,255,255,0.06)', padding: '2px 14px', borderRadius: '6px', letterSpacing: '4px' }}>
+                {selectedCombo}
+              </span>
+              <Tooltip text="Pick-3 pays roughly $500 on a $1 straight (exact order) bet vs $80 on a $1 box (any order) bet. All 6 cards below show every possible exact ordering of this combination, ranked from most overdue to most recently hit. Bet the ★ OVERDUE card as your straight to maximize return.">
+                <HelpIcon />
+              </Tooltip>
+            </h3>
+            <button
+              onClick={() => setSelectedCombo(null)}
+              style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
+            >
+              ✕ Close
             </button>
           </div>
 
-          {/* ── Sniper Mode ────────────────────────────────────────────── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', padding: '8px 12px', background: sniperMode ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.01)', border: `1px solid ${sniperMode ? 'rgba(16,185,129,0.3)' : 'var(--border-color)'}`, borderRadius: '8px', flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px' }}>
-              <input
-                type="checkbox" checked={sniperMode}
-                onChange={(e) => setSniperMode(e.target.checked)}
-                style={{ accentColor: 'var(--primary)', width: '15px', height: '15px' }}
-              />
-              <span style={{ color: sniperMode ? 'var(--primary)' : 'var(--text-muted)', fontWeight: sniperMode ? '600' : 'normal' }}>
-                🎯 Sniper Mode
-              </span>
-            </label>
-            {sniperMode ? (
-              <span style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                — top
-                <input
-                  type="number" min="1" max="20" value={sniperCount}
-                  onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v > 0) setSniperCount(v); }}
-                  style={{ width: '44px', padding: '3px 6px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--primary)', color: 'var(--primary)', borderRadius: '4px', fontSize: '13px', fontWeight: '600' }}
-                />
-                most overdue combos only
-              </span>
-            ) : (
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)', opacity: 0.7 }}>
-                Narrows to the top N most overdue combos — lower daily cost, concentrated firepower.
-              </span>
-            )}
-          </div>
-
-          {/* Master list indicator */}
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--primary)', display: 'inline-block', flexShrink: 0 }}></span>
-            Locked to <strong style={{ color: 'var(--text-main)' }}>120 non-repeating Master List</strong>. Small number = draws since last box hit (<span style={{ color: 'var(--primary)' }}>∞ = overdue</span>, <span style={{ color: 'var(--danger)' }}>red = recent</span>). <span style={{ color: 'var(--primary)', fontWeight: '500' }}>Click any combo for exact bet analysis.</span>
-          </div>
-
-          {/* ── Combo Badges ───────────────────────────────────────────── */}
-          <div className="comb-list-container">
-            {baseCombinations.map((comb) => {
-              const isFiltered = lastDrawsStandardized.has(comb);
-              if (isFiltered && showOnlyFiltered) return null;
-              if (sniperMode && !isFiltered && !sniperSet.has(comb)) return null;
-              const isSelected = selectedCombo === comb;
-              const isSniperPick = sniperMode && sniperSet.has(comb);
-              const gapEntry = comboGapMap.get(comb);
-
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(115px, 1fr))', gap: '8px' }}>
+            {straightPerms.map(({ perm, lastHit, frequency }, i) => {
+              const isOverdue = lastHit === 999;
+              const isHot = !isOverdue && lastHit <= 10;
               return (
-                <div
-                  key={comb}
-                  className={`comb-badge ${isFiltered ? 'filtered' : ''}`}
-                  title={isFiltered ? 'Filtered: appeared in recent draw history' : 'Click to analyze exact/straight bet permutations'}
-                  onClick={() => { if (!isFiltered) setSelectedCombo(isSelected ? null : comb); }}
-                  style={{
-                    cursor: isFiltered ? 'default' : 'pointer',
-                    display: 'inline-flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    ...(isSelected ? { borderColor: 'var(--primary)', boxShadow: '0 0 8px rgba(16,185,129,0.5)', color: 'var(--primary)' } : {}),
-                    ...(isSniperPick && !isSelected ? { borderColor: 'rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.07)' } : {})
-                  }}
-                >
-                  <span>{comb}</span>
-                  {gapEntry && (
-                    <span style={{ display: 'block', fontSize: '8px', marginTop: '1px', lineHeight: 1, fontFamily: 'var(--font-mono)', color: gapEntry.lastHit === 999 ? 'var(--primary)' : gapEntry.lastHit <= 10 ? 'var(--danger)' : 'rgba(255,255,255,0.3)', opacity: isFiltered ? 0.4 : 1 }}>
-                      {gapEntry.lastHit === 999 ? '∞' : `${gapEntry.lastHit}d`}
-                    </span>
-                  )}
+                <div key={perm} style={{
+                  background: isOverdue ? 'rgba(16,185,129,0.07)' : isHot ? 'rgba(239,68,68,0.05)' : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${isOverdue ? 'rgba(16,185,129,0.5)' : isHot ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.07)'}`,
+                  borderRadius: '8px', padding: '10px 8px', textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: '9px', color: 'var(--text-muted)', marginBottom: '5px', fontWeight: '600' }}>#{i + 1}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '22px', fontWeight: 'bold', color: 'var(--text-main)', letterSpacing: '3px' }}>
+                    {perm}
+                  </div>
+                  <div style={{ fontSize: '10px', color: isOverdue ? 'var(--primary)' : isHot ? 'var(--danger)' : 'var(--text-muted)', marginTop: '5px', fontWeight: '600', textTransform: 'uppercase', lineHeight: 1.3 }}>
+                    {isOverdue ? '★ OVERDUE' : isHot ? `⚡ ${lastHit} draws ago` : `${lastHit} draws ago`}
+                  </div>
+                  <div style={{ fontSize: '9px', color: 'var(--text-muted)', marginTop: '3px' }}>
+                    {frequency === 0 ? 'No exact hits' : `${frequency}× exact`}
+                  </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(perm); alert(`📋 ${perm} copied!`); }}
+                    style={{ marginTop: '7px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', width: '100%' }}
+                  >
+                    📋 Copy Exact
+                  </button>
                 </div>
               );
             })}
           </div>
 
-          {/* ── Position Frequency Heat Map ─────────────────────────────── */}
-          <div style={{ marginTop: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <h4 style={{ fontSize: '13px', color: 'var(--text-main)', margin: 0 }}>
-                📍 Position Frequency Heat Map
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
-                  last {historyFilterDays || 14} draws
-                </span>
-                <Tooltip text="Shows which digits appear most in each draw position (left, middle, right). Use this alongside the Straight Bet Analyzer to identify the most likely exact ordering — bet the hottest digit in each position."><HelpIcon /></Tooltip>
-              </h4>
-              <button
-                onClick={() => setShowPositionMap(v => !v)}
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}
-              >
-                {showPositionMap ? 'Hide ▲' : 'Show ▼'}
-              </button>
-            </div>
-
-            {showPositionMap && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                {['Pos 1 (Left)', 'Pos 2 (Mid)', 'Pos 3 (Right)'].map((label, posIdx) => {
-                  const freq = positionFreqs[posIdx];
-                  const entries = Object.entries(freq)
-                    .map(([d, c]) => [parseInt(d, 10), c])
-                    .sort((a, b) => b[1] - a[1]);
-                  const maxCount = entries[0]?.[1] || 1;
-
-                  return (
-                    <div key={posIdx} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px' }}>
-                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        {label}
-                      </div>
-                      {entries.slice(0, 6).map(([digit, count]) => {
-                        const isHot = count > 0 && count === maxCount;
-                        const isCold = count === 0;
-                        return (
-                          <div key={digit} style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px' }}>
-                            <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: isHot ? 'var(--primary)' : 'var(--text-main)', width: '14px', textAlign: 'center', fontWeight: isHot ? '700' : 'normal' }}>
-                              {digit}
-                            </span>
-                            <div style={{ flex: 1, height: '5px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
-                              <div style={{ width: `${maxCount > 0 ? (count / maxCount) * 100 : 0}%`, height: '100%', background: isHot ? 'var(--primary)' : isCold ? 'transparent' : 'rgba(16,185,129,0.35)', borderRadius: '3px' }} />
-                            </div>
-                            <span style={{ fontSize: '9px', color: isHot ? 'var(--primary)' : 'var(--text-muted)', width: '18px', textAlign: 'right', fontWeight: isHot ? '600' : 'normal' }}>
-                              {count}x
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {showPositionMap && (
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px', lineHeight: '1.5' }}>
-                💡 <strong style={{ color: 'var(--text-main)' }}>How to use:</strong> The hottest (green) digit in each position is what's been appearing most in recent draws. Cross-reference with the Straight Bet Analyzer below to pick the most likely exact ordering for your straight bet.
-              </p>
-            )}
-          </div>
-
-          {/* ── Straight / Exact Bet Analyzer ──────────────────────────── */}
-          {selectedCombo && (
-            <div style={{ marginTop: '20px', background: 'rgba(16,185,129,0.03)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '12px', padding: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-                <h3 style={{ color: 'var(--primary)', fontSize: '15px', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  🎯 Straight/Exact Bet Analyzer
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', color: 'var(--text-main)', background: 'rgba(255,255,255,0.06)', padding: '2px 10px', borderRadius: '6px', letterSpacing: '2px' }}>
-                    {selectedCombo}
-                  </span>
-                </h3>
-                <button
-                  onClick={() => setSelectedCombo(null)}
-                  style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
-                >
-                  ✕ Clear
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', fontSize: '12px', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                Scan last
-                <input
-                  type="number" min="1" max="500" value={straightLookback}
-                  onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v > 0) setStraightLookback(v); }}
-                  style={{ width: '55px', padding: '3px 6px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', fontSize: '12px' }}
-                />
-                draws for exact-order history.
-                <strong style={{ color: 'var(--text-main)' }}>Most overdue shown first.</strong>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(115px, 1fr))', gap: '8px' }}>
-                {straightPerms.map(({ perm, lastHit, frequency }) => {
-                  const isOverdue = lastHit === 999;
-                  const isHot = !isOverdue && lastHit <= 10;
-                  const borderColor = isOverdue ? 'rgba(16,185,129,0.5)' : isHot ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.07)';
-                  const bgColor = isOverdue ? 'rgba(16,185,129,0.07)' : isHot ? 'rgba(239,68,68,0.05)' : 'rgba(255,255,255,0.02)';
-                  const statusLabel = isOverdue ? '★ OVERDUE' : isHot ? `⚡ ${lastHit} AGO` : `${lastHit} draws ago`;
-                  const statusColor = isOverdue ? 'var(--primary)' : isHot ? 'var(--danger)' : 'var(--text-muted)';
-
-                  return (
-                    <div key={perm} style={{ background: bgColor, border: `1px solid ${borderColor}`, borderRadius: '8px', padding: '10px 8px', textAlign: 'center' }}>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '22px', fontWeight: 'bold', color: 'var(--text-main)', letterSpacing: '3px' }}>{perm}</div>
-                      <div style={{ fontSize: '10px', color: statusColor, marginTop: '4px', fontWeight: '600', textTransform: 'uppercase', lineHeight: '1.3' }}>{statusLabel}</div>
-                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>{frequency === 0 ? 'No exact hits' : `${frequency}x exact`}</div>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(perm); alert(`📋 ${perm} copied!`); }}
-                        style={{ marginTop: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', width: '100%' }}
-                      >
-                        📋 Copy
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <p style={{ marginTop: '12px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-                💡 <strong style={{ color: 'var(--text-main)' }}>Strategy:</strong> Green <strong>"OVERDUE"</strong> cards have never appeared in the last {straightLookback} draws — top straight bet candidates. Red <strong>"HOT"</strong> cards hit within the last 10 draws. Play <strong>$0.50 straight</strong> on the most overdue order + <strong>$0.50 box</strong> on the combination.
-              </p>
-            </div>
-          )}
-
-          <div style={{ marginTop: '16px', fontSize: '11px', color: 'var(--text-muted)', textAlign: 'left' }}>
-            📝 <strong>How to play:</strong> Start with the <strong>Top 3 Picks</strong> above (${wagerPerCombo.toFixed(2)}/combo box = <strong>${(topPicks.length * wagerPerCombo).toFixed(2)}</strong> total). Enable <strong>Sniper Mode</strong> to narrow to the top N most overdue. Adjust the <strong>Wager per combo</strong> above at any time — all costs and payouts update instantly.
-          </div>
+          <p style={{ marginTop: '14px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.7', padding: '10px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
+            💡 <strong style={{ color: 'var(--text-main)' }}>Bet Strategy:</strong> Play <strong style={{ color: 'var(--primary)' }}>{selectedCombo}</strong> as a <strong>$0.50 box</strong> (any order, ~$40 payout) + the <strong style={{ color: 'var(--primary)' }}>★ OVERDUE</strong> ordering as a <strong>$0.50 straight</strong> (exact order, ~$250 payout). Total cost: <strong>$1.00</strong>. Box hit = double your money. Exact hit = ~250× your straight stake.
+          </p>
         </div>
       )}
+
+      {/* ── HOW TO USE ─────────────────────────────────────────────────── */}
+      <div style={{ marginTop: '24px', padding: '14px 16px', background: 'rgba(0,0,0,0.15)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.8' }}>
+        <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '6px', fontSize: '13px' }}>📖 How to Use This System</strong>
+        <ol style={{ margin: 0, paddingLeft: '16px' }}>
+          <li>Set <strong style={{ color: 'var(--text-main)' }}>Scan last</strong> to your preferred lookback (14 days is a good starting point).</li>
+          <li>Check <strong style={{ color: 'var(--primary)' }}>Today's Top Picks</strong> — these are the most overdue combinations from the 120.</li>
+          <li>For each pick, find the <strong style={{ color: 'var(--primary)' }}>★ OVERDUE</strong> exact ordering — that's your straight bet.</li>
+          <li>Play: <strong>$0.50 box</strong> on the combination + <strong>$0.50 straight</strong> on the ★ overdue ordering.</li>
+          <li>Combos appearing in recent draws are automatically excluded to keep your odds sharp.</li>
+        </ol>
+      </div>
     </div>
   );
 }
