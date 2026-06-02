@@ -35,7 +35,7 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits }) {
   const activeCombos = filteredCombinations.length;
   const filteredCount = totalCombos - activeCombos;
   const totalInvestment = activeCombos * 1.00; // $1 per play
-  const expectedPayout = 100.00;
+  const expectedPayout = 80.00;
   const netProfit = expectedPayout - totalInvestment;
 
   // Copy-to-clipboard functionality
