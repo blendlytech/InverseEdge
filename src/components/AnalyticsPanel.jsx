@@ -15,6 +15,20 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
   const frequencies = calculateFrequencies(drawStrings);
   const gapTimes = calculateGapTimes(drawStrings);
 
+    // Calculate Doubles and Triples in the current lookback window
+  let doubleCount = 0;
+  let tripleCount = 0;
+  
+  drawStrings.forEach(draw => {
+    if (draw && draw.length === 3) {
+      if (draw[0] === draw[1] && draw[1] === draw[2]) {
+        tripleCount++;
+      } else if (draw[0] === draw[1] || draw[1] === draw[2] || draw[0] === draw[2]) {
+        doubleCount++;
+      }
+    }
+  });
+
   // Auto-prediction trigger
   const runAIPrediction = (count) => {
     const recommendations = getAIRecommendations(frequencies, gapTimes, count);
@@ -43,6 +57,18 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
         /> 
         drawings. {maxDraws > 0 && <span style={{fontSize: '12px', opacity: 0.7}}>(Max: {maxDraws})</span>}
       </p>
+
+      {/* Doubles / Triples Scoreboard */}
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
+        <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '8px', flex: 1, textAlign: 'center', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Doubles</div>
+          <div style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: '1' }}>{doubleCount}</div>
+        </div>
+        <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '8px', flex: 1, textAlign: 'center', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Triples</div>
+          <div style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: '1' }}>{tripleCount}</div>
+        </div>
+      </div>
 
       {/* AI Recommendation Card */}
       <div style={{ 
