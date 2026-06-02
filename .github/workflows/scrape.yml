@@ -1,0 +1,27 @@
+name: Lottery Scraper Autopilot
+
+on:
+  schedule:
+    # Run every night at 5:00 AM UTC (which is 10:00 PM / 11:00 PM Mountain Time)
+    - cron: '0 5 * * *'
+  workflow_dispatch: # Allows manual trigger from the GitHub UI
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Scraper Script
+        run: node scripts/scraper.js

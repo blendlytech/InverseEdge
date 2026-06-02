@@ -9,7 +9,10 @@ const URL = 'https://www.coloradolottery.com/en/games/pick3/';
 
 async function scrapePick3() {
   console.log('Launching browser...');
-  const browser = await puppeteer.launch({ headless: 'new' });
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
   const page = await browser.newPage();
   
   console.log(`Navigating to ${URL}...`);
