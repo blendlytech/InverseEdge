@@ -12,7 +12,7 @@ const HelpIcon = () => (
   <span style={{ cursor: 'help', color: 'var(--primary)', opacity: 0.8, fontSize: '12px', marginLeft: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', border: '1px solid var(--primary)', borderRadius: '50%', fontWeight: 'bold' }}>?</span>
 );
 
-export default function PlayGeneratorPanel({ draws, eliminatedDigits }) {
+export default function PlayGeneratorPanel({ draws, eliminatedDigits, historyFilterDays = 14, setHistoryFilterDays }) {
   const [showOnlyFiltered, setShowOnlyFiltered] = useState(true);
   
   // 1. Generate core 120 master list
@@ -24,14 +24,14 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits }) {
   // 3. Extract draw strings for the history filter
   const drawStrings = draws.map(d => d.draw);
   
-  // 4. Apply 14-day history filter
-  const filteredCombinations = applyHistoryFilter(baseCombinations, drawStrings);
+  // 4. Apply history filter
+  const filteredCombinations = applyHistoryFilter(baseCombinations, drawStrings, historyFilterDays);
   
   // Grab the list of drawings that caused exclusions for labeling
-  const last14DrawsStandardized = new Set(
+  const lastDrawsStandardized = new Set(
     drawStrings
       .filter(draw => !isDoubleOrTriple(draw))
-      .slice(0, 14)
+      .slice(0, historyFilterDays)
       .map(normalizeDraw)
   );
 
@@ -150,21 +150,38 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits }) {
               color: 'var(--text-main)',
               textAlign: 'left'
             }}>
-              🔥 <strong>History Filter Advantage<Tooltip text="Combinations drawn in the last 14 days are statistically unlikely to repeat so soon. We automatically filter them out to save you capital and increase your net profit."><HelpIcon /></Tooltip>:</strong> Automatically removed <strong>{filteredCount} combinations</strong> that matched draws from the last 14 days. This **saved you ${filteredCount.toFixed(2)}** in capital and pushed your net profit up from ${(expectedPayout - totalCombos).toFixed(2)} to **${netProfit.toFixed(2)}**!
+              🔥 <strong>History Filter Advantage<Tooltip text={`Combinations drawn in the last ${historyFilterDays} days are statistically unlikely to repeat so soon. We automatically filter them out to save you capital and increase your net profit.`}><HelpIcon /></Tooltip>:</strong> Automatically removed <strong>{filteredCount} combinations</strong> that matched draws from the last {historyFilterDays} days. This **saved you ${filteredCount.toFixed(2)}** in capital and pushed your net profit up from ${(expectedPayout - totalCombos).toFixed(2)} to **${netProfit.toFixed(2)}**!
             </div>
           )}
 
           {/* Combinations listing controls */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)', cursor: 'pointer' }}>
-              <input 
-                type="checkbox" 
-                checked={showOnlyFiltered}
-                onChange={(e) => setShowOnlyFiltered(e.target.checked)}
-                style={{ accentColor: 'var(--primary)', width: '15px', height: '15px' }}
-              />
-              Hide history-filtered (crossed-out) combinations
-            </label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                History Filter Days:
+                <input 
+                  type="number" 
+                  min="0" 
+                  max="100" 
+                  value={historyFilterDays}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!isNaN(val)) setHistoryFilterDays(val);
+                  }}
+                  style={{ width: '60px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', padding: '4px 8px' }}
+                />
+              </label>
+              
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={showOnlyFiltered}
+                  onChange={(e) => setShowOnlyFiltered(e.target.checked)}
+                  style={{ accentColor: 'var(--primary)', width: '15px', height: '15px' }}
+                />
+                Hide history-filtered (crossed-out) combinations
+              </label>
+            </div>
             
             <button onClick={handleCopy} className="btn btn-secondary btn-small" style={{ fontSize: '12px', padding: '6px 12px' }}>
               📋 Copy Play List
@@ -174,7 +191,7 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits }) {
           {/* Combinations list */}
           <div className="comb-list-container">
             {baseCombinations.map((comb) => {
-              const isFiltered = last14DrawsStandardized.has(comb);
+              const isFiltered = lastDrawsStandardized.has(comb);
               if (isFiltered && showOnlyFiltered) return null;
               
               return (

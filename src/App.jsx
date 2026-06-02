@@ -70,6 +70,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : [0, 1, 2]; // Default matches Strategy 1 recommendation
   });
 
+  const [historyFilterDays, setHistoryFilterDays] = useState(() => {
+    const saved = localStorage.getItem('inverse_edge_history_days');
+    return saved ? parseInt(saved, 10) : 14;
+  });
+
   // Load active right-side panel tab ('heatmap', 'playgen', 'sync')
   const [activeTab, setActiveTab] = useState('heatmap');
 
@@ -102,6 +107,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('inverse_edge_eliminations', JSON.stringify(eliminatedDigits));
   }, [eliminatedDigits]);
+
+  useEffect(() => {
+    localStorage.setItem('inverse_edge_history_days', historyFilterDays);
+  }, [historyFilterDays]);
 
   // App handlers
 
@@ -211,11 +220,16 @@ export default function App() {
             <PlayGeneratorPanel 
               draws={draws}
               eliminatedDigits={eliminatedDigits}
+              historyFilterDays={historyFilterDays}
+              setHistoryFilterDays={setHistoryFilterDays}
             />
           )}
 
           {activeTab === 'backtest' && (
-            <BacktestPanel draws={draws} />
+            <BacktestPanel 
+              draws={draws} 
+              initialHistoryFilterDays={historyFilterDays}
+            />
           )}
 
           {activeTab === 'sync' && (

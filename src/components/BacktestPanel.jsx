@@ -6,10 +6,11 @@ const HelpIcon = () => (
   <span style={{ cursor: 'help', color: 'var(--primary)', opacity: 0.8, fontSize: '12px', marginLeft: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', border: '1px solid var(--primary)', borderRadius: '50%', fontWeight: 'bold' }}>?</span>
 );
 
-export default function BacktestPanel({ draws }) {
+export default function BacktestPanel({ draws, initialHistoryFilterDays = 14 }) {
   const [lookbackWindow, setLookbackWindow] = useState(50);
   const [elimCount, setElimCount] = useState(3);
   const [useHistoryFilter, setUseHistoryFilter] = useState(true);
+  const [historyFilterDays, setHistoryFilterDays] = useState(initialHistoryFilterDays);
   const [drawFilter, setDrawFilter] = useState('All');
   const [results, setResults] = useState(null);
 
@@ -28,6 +29,7 @@ export default function BacktestPanel({ draws }) {
       lookbackWindow,
       elimCount,
       useHistoryFilter,
+      historyFilterDays,
       wager: 1.00,
       payout: 80.00
     };
@@ -75,15 +77,30 @@ export default function BacktestPanel({ draws }) {
           </select>
         </div>
         <div className="input-group">
-          <label>14-Day History Filter</label>
-          <select 
-            className="custom-input" 
-            value={useHistoryFilter ? 'yes' : 'no'} 
-            onChange={(e) => setUseHistoryFilter(e.target.value === 'yes')}
-          >
-            <option value="yes">Enabled</option>
-            <option value="no">Disabled</option>
-          </select>
+          <label>History Filter</label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <select 
+              className="custom-input" 
+              style={{ flex: 1 }}
+              value={useHistoryFilter ? 'yes' : 'no'} 
+              onChange={(e) => setUseHistoryFilter(e.target.value === 'yes')}
+            >
+              <option value="yes">Enabled</option>
+              <option value="no">Disabled</option>
+            </select>
+            {useHistoryFilter && (
+              <input 
+                type="number"
+                className="custom-input"
+                style={{ width: '60px' }}
+                value={historyFilterDays}
+                onChange={(e) => setHistoryFilterDays(Number(e.target.value))}
+                min="0"
+                max="100"
+                title="Days to filter"
+              />
+            )}
+          </div>
         </div>
         <div className="input-group">
           <label>Draw Filter</label>

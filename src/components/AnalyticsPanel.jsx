@@ -8,7 +8,17 @@ const HelpIcon = () => (
 );
 
 export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimination, onSetEliminations }) {
+  const [lookbackType, setLookbackType] = React.useState('count'); // 'count' or 'date'
   const [lookbackCount, setLookbackCount] = React.useState(50);
+  const [startDate, setStartDate] = React.useState(() => {
+    // Default to 14 days ago
+    const d = new Date();
+    d.setDate(d.getDate() - 14);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = React.useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
   const [drawFilter, setDrawFilter] = React.useState('All');
   
   // Filter draws by Midday/Evening
@@ -21,8 +31,20 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
   const maxDraws = filteredDraws.length;
   const validLookback = Math.min(Math.max(1, lookbackCount || 1), maxDraws > 0 ? maxDraws : 50);
   
-  // Extract just the draw strings for calculations, sliced by the lookback window
-  const drawStrings = filteredDraws.slice(0, validLookback).map(d => d.draw);
+  // Extract just the draws for calculations, based on lookback type
+  let activeDraws = [];
+  if (lookbackType === 'count') {
+    activeDraws = filteredDraws.slice(0, validLookback);
+  } else {
+    activeDraws = filteredDraws.filter(d => {
+      const dateStr = d.date.split(' ')[0];
+      if (startDate && dateStr < startDate) return false;
+      if (endDate && dateStr > endDate) return false;
+      return true;
+    });
+  }
+  
+  const drawStrings = activeDraws.map(d => d.draw);
   
   // Calculate analytics
   const frequencies = calculateFrequencies(drawStrings);
@@ -36,7 +58,7 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
   const doubleFrequencies = {};
   const tripleFrequencies = {};
   
-  filteredDraws.slice(0, validLookback).forEach(d => {
+  activeDraws.forEach(d => {
     const draw = d.draw;
     if (draw && draw.length === 3) {
       if (draw[0] === draw[1] && draw[1] === draw[2]) {
@@ -96,21 +118,55 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
         </div>
       </div>
 
-      <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        Analyzing occurrences over your last 
-        <input 
-          type="number" 
-          min="1" 
-          max={maxDraws > 0 ? maxDraws : 50} 
-          value={lookbackCount} 
-          onChange={(e) => setLookbackCount(Number(e.target.value))}
-          style={{ width: '60px', padding: '4px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px' }}
-        /> 
-        drawings. {maxDraws > 0 && <span style={{fontSize: '12px', opacity: 0.7}}>(Max: {maxDraws})</span>}
-      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', flexWrap: 'wrap', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Analyze by:</span>
+          <select 
+            value={lookbackType} 
+            onChange={(e) => setLookbackType(e.target.value)}
+            style={{ padding: '4px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', fontSize: '13px' }}
+          >
+            <option value="count">Recent Draws</option>
+            <option value="date">Date Range</option>
+          </select>
+        </div>
+
+        {lookbackType === 'count' ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
+            Last 
+            <input 
+              type="number" 
+              min="1" 
+              max={maxDraws > 0 ? maxDraws : 50} 
+              value={lookbackCount} 
+              onChange={(e) => setLookbackCount(Number(e.target.value))}
+              style={{ width: '60px', padding: '4px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px' }}
+            /> 
+            drawings. {maxDraws > 0 && <span style={{fontSize: '11px', opacity: 0.7}}>(Max: {maxDraws})</span>}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
+            From 
+            <input 
+              type="date" 
+              value={startDate} 
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{ padding: '4px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px' }}
+            />
+            to
+            <input 
+              type="date" 
+              value={endDate} 
+              onChange={(e) => setEndDate(e.target.value)}
+              style={{ padding: '4px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px' }}
+            />
+            <span style={{ fontSize: '11px', opacity: 0.7, marginLeft: '4px' }}>({activeDraws.length} draws found)</span>
+          </div>
+        )}
+      </div>
 
       {/* Visual Heatmap Chart */}
-      <TemperatureChart draws={filteredDraws} lookback={validLookback} />
+      <TemperatureChart draws={activeDraws} lookback={activeDraws.length} />
       <p style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '-16px', marginBottom: '24px', opacity: 0.8 }}>
         💡 <strong>Pro Tip:</strong> Click on any digit in the chart's legend above to instantly hide or isolate its timeline.
       </p>
