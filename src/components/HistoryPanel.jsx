@@ -1,77 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { isDoubleOrTriple } from '../utils/AIEngine';
 
-export default function HistoryPanel({ draws, onAddDraw, onDeleteDraw, onClearHistory }) {
-  const [newDraw, setNewDraw] = useState('');
-  const [newDate, setNewDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [error, setError] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setError('');
-
-    // Validate 3-digit input
-    const cleanDraw = newDraw.trim();
-    if (!/^\d{3}$/.test(cleanDraw)) {
-      setError('Draw must be exactly 3 digits (e.g., 210, 059).');
-      return;
-    }
-
-    onAddDraw({ date: newDate, draw: cleanDraw });
-    setNewDraw('');
-  };
-
+export default function HistoryPanel({ draws, onDeleteDraw, onClearHistory }) {
   return (
     <div className="glass-card">
-      <h2 style={{ marginBottom: '16px' }} className="glow-text-primary">Daily Draw Entry</h2>
-      
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div className="input-group">
-          <label htmlFor="draw-date">Draw Date</label>
-          <input
-            id="draw-date"
-            type="date"
-            className="custom-input"
-            value={newDate}
-            onChange={(e) => setNewDate(e.target.value)}
-            required
-          />
-        </div>
-
-        <div className="input-group">
-          <label htmlFor="draw-digits">Draw Digits (3-Digits)</label>
-          <input
-            id="draw-digits"
-            type="text"
-            pattern="\d*"
-            maxLength={3}
-            placeholder="e.g. 543"
-            className="custom-input"
-            value={newDraw}
-            onChange={(e) => setNewDraw(e.target.value.replace(/\D/g, ''))}
-            required
-            style={{ letterSpacing: '4px', textAlign: 'center', fontSize: '20px', fontWeight: 'bold' }}
-          />
-        </div>
-
-        {error && (
-          <div style={{ color: 'var(--danger)', fontSize: '13px', textAlign: 'left', fontWeight: '500' }}>
-            ⚠️ {error}
-          </div>
-        )}
-
-        {newDraw.length === 3 && isDoubleOrTriple(newDraw) && (
-          <div style={{ color: 'var(--secondary)', fontSize: '12px', textAlign: 'left', background: 'rgba(234, 179, 8, 0.1)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(234, 179, 8, 0.2)' }}>
-            ℹ️ <strong>Double/Triple Detected!</strong> This draw will be saved to your history, but our AI automatically filters it out from calculations (per system rules).
-          </div>
-        )}
-
-        <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '8px' }}>
-          Add Daily Draw
-        </button>
-      </form>
-
-      <hr style={{ border: '0', borderTop: '1px solid var(--border-color)', margin: '24px 0' }} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
         <h3 style={{ fontSize: '18px', color: 'var(--text-main)' }}>Draw History ({draws.length})</h3>

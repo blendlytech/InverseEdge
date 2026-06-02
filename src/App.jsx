@@ -104,10 +104,6 @@ export default function App() {
   }, [eliminatedDigits]);
 
   // App handlers
-  const handleAddDraw = (newDrawObj) => {
-    // Insert at the top (index 0) to represent newest draw
-    setDraws((prev) => [newDrawObj, ...prev]);
-  };
 
   const handleDeleteDraw = (indexToDelete) => {
     setDraws((prev) => prev.filter((_, idx) => idx !== indexToDelete));
@@ -169,7 +165,6 @@ export default function App() {
         <section style={{ position: 'relative', zIndex: '2' }}>
           <HistoryPanel 
             draws={draws}
-            onAddDraw={handleAddDraw}
             onDeleteDraw={handleDeleteDraw}
             onClearHistory={handleClearHistory}
           />
