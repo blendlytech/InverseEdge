@@ -2,8 +2,14 @@ import React from 'react';
 import { calculateFrequencies, calculateGapTimes, getAIRecommendations } from '../utils/AIEngine';
 
 export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimination, onSetEliminations }) {
-  // Extract just the draw strings for calculations
-  const drawStrings = draws.map(d => d.draw);
+  const [lookbackCount, setLookbackCount] = React.useState(50);
+  
+  // Constrain lookback to actual available data
+  const maxDraws = draws.length;
+  const validLookback = Math.min(Math.max(1, lookbackCount || 1), maxDraws > 0 ? maxDraws : 50);
+  
+  // Extract just the draw strings for calculations, sliced by the lookback window
+  const drawStrings = draws.slice(0, validLookback).map(d => d.draw);
   
   // Calculate analytics
   const frequencies = calculateFrequencies(drawStrings);
@@ -25,8 +31,17 @@ export default function AnalyticsPanel({ draws, eliminatedDigits, onToggleElimin
   return (
     <div className="glass-card">
       <h2 style={{ marginBottom: '8px' }} className="glow-text-secondary">AI Prediction Engine</h2>
-      <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px' }}>
-        Analyzing digit temperature and tracking occurrences over your last 50 drawings.
+      <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        Analyzing occurrences over your last 
+        <input 
+          type="number" 
+          min="1" 
+          max={maxDraws > 0 ? maxDraws : 50} 
+          value={lookbackCount} 
+          onChange={(e) => setLookbackCount(Number(e.target.value))}
+          style={{ width: '60px', padding: '4px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px' }}
+        /> 
+        drawings. {maxDraws > 0 && <span style={{fontSize: '12px', opacity: 0.7}}>(Max: {maxDraws})</span>}
       </p>
 
       {/* AI Recommendation Card */}
