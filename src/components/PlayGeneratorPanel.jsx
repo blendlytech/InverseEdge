@@ -190,7 +190,7 @@ export default function PlayGeneratorPanel({ draws, eliminatedDigits }) {
           </div>
 
           <div style={{ marginTop: '16px', fontSize: '11px', color: 'var(--text-muted)', textAlign: 'left' }}>
-            📝 <strong>How to play:</strong> Write down or copy these {activeCombos} numbers. Place a **$1.00 Box Bet** on each combination at your local retailer. Any order matches (e.g. you have 543 and the draw is 345, you win $100!).
+            📝 <strong>How to play:</strong> Write down or copy these {activeCombos} numbers. Place a <strong>$1.00 Box Bet</strong> on each combination at your local retailer. If any of these hit in any order (e.g. you have 543 and the draw is 345), you win <strong>${expectedPayout.toFixed(2)}</strong>, giving you a clean net profit of <strong>${netProfit.toFixed(2)}</strong>!
           </div>
         </div>
       )}
