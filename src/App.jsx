@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import DrawEntryPanel from './components/DrawEntryPanel';
 import BestExactPanel from './components/BestExactPanel';
 import FrequencyPanel from './components/FrequencyPanel';
@@ -1518,14 +1518,37 @@ const DEFAULT_MOCK_DRAWS = [
 ];
 
 export default function App() {
-  const [draws, setDraws] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showHistory, setShowHistory] = useState(false);
+  const [supabaseDraws, setSupabaseDraws] = useState([]);
+  const [isLoading, setIsLoading]         = useState(true);
+  const [showHistory, setShowHistory]     = useState(false);
+
+  // User-entered draws — persisted to localStorage indefinitely
+  const [userDraws, setUserDraws] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('inverse_edge_user_draws') || '[]'); }
+    catch { return []; }
+  });
 
   const [historyFilterDays, setHistoryFilterDays] = useState(() => {
     const saved = localStorage.getItem('inverse_edge_history_days');
     return saved ? parseInt(saved, 10) : 14;
   });
+
+  // Persist user draws any time they change
+  useEffect(() => {
+    localStorage.setItem('inverse_edge_user_draws', JSON.stringify(userDraws));
+  }, [userDraws]);
+
+  // Merged draw list: mock → Supabase → user draws (each layer wins deduplication)
+  const draws = useMemo(() => {
+    const map = new Map();
+    DEFAULT_MOCK_DRAWS.forEach(d => map.set(d.date, d));
+    supabaseDraws.forEach(d => map.set(d.date, d));
+    userDraws.forEach(d => map.set(d.date, d));
+    return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }, [supabaseDraws, userDraws]);
+
+  // Set of dates the user personally entered — drives delete-button visibility
+  const userDrawDates = useMemo(() => new Set(userDraws.map(d => d.date)), [userDraws]);
 
   const fetchDraws = async () => {
     setIsLoading(true);
@@ -1535,22 +1558,12 @@ export default function App() {
       .order('draw_date', { ascending: false })
       .order('draw_type', { ascending: true });
 
-    let finalDraws = [...DEFAULT_MOCK_DRAWS];
-
     if (!error && data && data.length > 0) {
-      const formatted = data.map(row => ({
+      setSupabaseDraws(data.map(row => ({
         date: `${row.draw_date} ${row.draw_type}`,
-        draw: row.draw_number
-      }));
-      const drawsMap = new Map();
-      DEFAULT_MOCK_DRAWS.forEach(d => drawsMap.set(d.date, d.draw));
-      formatted.forEach(d => drawsMap.set(d.date, d.draw));
-      finalDraws = Array.from(drawsMap.entries())
-        .map(([date, draw]) => ({ date, draw }))
-        .sort((a, b) => b.date.localeCompare(a.date));
+        draw: row.draw_number,
+      })));
     }
-
-    setDraws(finalDraws);
     setIsLoading(false);
   };
 
@@ -1560,13 +1573,19 @@ export default function App() {
     localStorage.setItem('inverse_edge_history_days', historyFilterDays);
   }, [historyFilterDays]);
 
-  const handleDeleteDraw = idx => setDraws(prev => prev.filter((_, i) => i !== idx));
+  // Permanently delete a user-entered draw by its date key
+  const handleDeleteUserDraw = date => {
+    setUserDraws(prev => prev.filter(d => d.date !== date));
+  };
+
+  // HistoryPanel compat: delete by index from merged draws; only persists for user draws
+  const handleDeleteDraw = idx => {
+    const target = draws[idx];
+    if (target) handleDeleteUserDraw(target.date);
+  };
 
   const handleAddDraw = newDraw => {
-    setDraws(prev => {
-      const updated = [newDraw, ...prev];
-      return updated.sort((a, b) => b.date.localeCompare(a.date));
-    });
+    setUserDraws(prev => [newDraw, ...prev.filter(d => d.date !== newDraw.date)]);
   };
 
   return (
@@ -1599,7 +1618,9 @@ export default function App() {
       }}>
         <DrawEntryPanel
           draws={draws}
+          userDraws={userDraws}
           onAddDraw={handleAddDraw}
+          onDeleteUserDraw={handleDeleteUserDraw}
           historyFilterDays={historyFilterDays}
         />
 
@@ -1634,7 +1655,7 @@ export default function App() {
           </button>
           {showHistory && (
             <div style={{ marginTop: '14px' }}>
-              <HistoryPanel draws={draws} onDeleteDraw={handleDeleteDraw} />
+              <HistoryPanel draws={draws} onDeleteDraw={handleDeleteDraw} userDrawDates={userDrawDates} />
             </div>
           )}
         </div>

@@ -34,7 +34,7 @@ function getTopPicks(draws, historyFilterDays, n = 5) {
   return scored.slice(0, n).map((s, i) => ({ ...s, rank: i + 1 }));
 }
 
-export default function DrawEntryPanel({ draws, onAddDraw, historyFilterDays }) {
+export default function DrawEntryPanel({ draws, userDraws = [], onAddDraw, onDeleteUserDraw, historyFilterDays }) {
   const [date, setDate] = useState(todayStr());
   const [drawType, setDrawType] = useState('Midday');
   const [drawNumber, setDrawNumber] = useState('');
@@ -48,8 +48,8 @@ export default function DrawEntryPanel({ draws, onAddDraw, historyFilterDays }) 
     if (isOpen && inputRef.current) inputRef.current.focus();
   }, [isOpen]);
 
-  // Show last 5 draws as a mini recap
-  const recentDraws = draws.slice(0, 5);
+  // Show user-entered draws for the recap (newest first, all of them scrollable)
+  const recentDraws = userDraws.slice(0, 20);
 
   const validate = () => {
     if (!/^\d{3}$/.test(drawNumber)) return 'Enter exactly 3 digits (e.g. 013 or 759).';
@@ -271,11 +271,17 @@ export default function DrawEntryPanel({ draws, onAddDraw, historyFilterDays }) 
             </div>
           )}
 
-          {/* Recent draws mini-recap */}
+          {/* Saved draws — user-entered, persisted, deletable */}
           {recentDraws.length > 0 && (
-            <div style={{ marginTop: '14px' }}>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                Last {recentDraws.length} Draws
+            <div style={{ marginTop: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                  Your Saved Draws
+                  <span style={{ marginLeft: '6px', color: 'var(--primary)', fontWeight: '600' }}>({recentDraws.length})</span>
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                  saved permanently · ✕ to delete
+                </div>
               </div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {recentDraws.map((d, i) => {
@@ -300,12 +306,30 @@ export default function DrawEntryPanel({ draws, onAddDraw, historyFilterDays }) 
                     <div
                       key={i}
                       style={{
-                        padding: '7px 12px', borderRadius: '6px', textAlign: 'center',
+                        position: 'relative',
+                        padding: '7px 12px 7px', borderRadius: '6px', textAlign: 'center',
                         background: isDouble ? 'rgba(234,179,8,0.08)' : 'rgba(255,255,255,0.03)',
                         border: `1px solid ${isDouble ? 'rgba(234,179,8,0.25)' : 'rgba(255,255,255,0.07)'}`,
                         minWidth: '72px',
                       }}
                     >
+                      {/* Delete button */}
+                      <button
+                        onClick={() => onDeleteUserDraw(d.date)}
+                        title={`Delete ${d.date}`}
+                        style={{
+                          position: 'absolute', top: '3px', right: '3px',
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: 'var(--text-muted)', fontSize: '10px', lineHeight: 1,
+                          padding: '1px 3px', borderRadius: '3px',
+                          opacity: 0.5,
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--danger)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                      >
+                        ✕
+                      </button>
+
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', fontWeight: 'bold', color: 'var(--text-main)', letterSpacing: '3px' }}>
                         {d.draw}
                       </div>
@@ -324,6 +348,13 @@ export default function DrawEntryPanel({ draws, onAddDraw, historyFilterDays }) 
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {recentDraws.length === 0 && (
+            <div style={{ marginTop: '14px', padding: '12px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
+              No saved draws yet — enter today's results above and they'll be saved here permanently.
             </div>
           )}
         </>
