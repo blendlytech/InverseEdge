@@ -1,8 +1,22 @@
 import { useState, useMemo } from 'react';
-import { generateMasterList, scoreComboFrequency } from '../utils/AIEngine';
+import { generateMasterList, scoreComboFrequency, toGuideForm, normalizeDraw, isDoubleOrTriple } from '../utils/AIEngine';
 import Tooltip from './Tooltip';
 
 const masterList = generateMasterList();
+const masterSet  = new Set(masterList);
+
+// Format stored date string ("2026-06-02 Midday") → "Jun 2 · ☀️ Midday"
+function formatHitDate(dateStr) {
+  const spaceIdx = dateStr.indexOf(' ');
+  const datePart = spaceIdx > -1 ? dateStr.slice(0, spaceIdx) : dateStr;
+  const typePart = spaceIdx > -1 ? dateStr.slice(spaceIdx + 1) : '';
+  const [, mo, dy] = datePart.split('-');
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const dateLabel = `${MONTHS[parseInt(mo, 10) - 1]} ${parseInt(dy, 10)}`;
+  if (!typePart) return dateLabel;
+  const icon = typePart === 'Midday' ? '☀️' : typePart === 'Evening' ? '🌙' : '';
+  return `${dateLabel} · ${icon} ${typePart}`;
+}
 
 const HelpIcon = () => (
   <span style={{
@@ -36,6 +50,7 @@ export default function FrequencyPanel({ draws }) {
   const [lookback, setLookback]       = useState(200);
   const [showFullList, setShowFullList] = useState(false);
   const [sortMode, setSortMode]       = useState('freq'); // 'freq' | 'combo'
+  const [hoveredCombo, setHoveredCombo] = useState(null);
 
   const totalDraws = draws.length;
   const effectiveLookback = Math.min(lookback, totalDraws);
@@ -44,6 +59,19 @@ export default function FrequencyPanel({ draws }) {
     () => scoreComboFrequency(masterList, draws.map(d => d.draw), effectiveLookback),
     [draws, effectiveLookback]
   );
+
+  // Map each box combo → array of {date, draw} hits within the lookback window (newest first)
+  const hitDatesMap = useMemo(() => {
+    const map = {};
+    draws.slice(0, effectiveLookback).forEach(d => {
+      if (isDoubleOrTriple(d.draw)) return;
+      const norm = normalizeDraw(d.draw);
+      if (!masterSet.has(norm)) return;
+      if (!map[norm]) map[norm] = [];
+      map[norm].push({ date: d.date, draw: d.draw });
+    });
+    return map;
+  }, [draws, effectiveLookback]);
 
   const displayList = sortMode === 'combo'
     ? [...ranked].sort((a, b) => a.combo.localeCompare(b.combo))
@@ -61,7 +89,6 @@ export default function FrequencyPanel({ draws }) {
     const arr = groups[grp];
     return arr.length ? (arr.reduce((s, v) => s + v, 0) / arr.length).toFixed(2) : '0.00';
   };
-  const groupMax = grp => Math.max(...(groups[grp].length ? groups[grp] : [0]));
 
   const highAvg  = parseFloat(groupAvg('high'));
   const lowAvg   = parseFloat(groupAvg('low'));
@@ -216,17 +243,58 @@ export default function FrequencyPanel({ draws }) {
                   <HelpIcon />
                 </Tooltip>
               </h4>
-              {topHitters.map(({ combo, hits }, i) => (
-                <div key={combo} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', width: '16px', textAlign: 'right', flexShrink: 0 }}>#{i + 1}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: '700', color: 'var(--text-main)', letterSpacing: '2px', width: '34px', flexShrink: 0 }}>{combo}</span>
-                  <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ width: `${topHitters[0].hits > 0 ? (hits / topHitters[0].hits) * 100 : 0}%`, height: '100%', background: 'var(--primary)', borderRadius: '3px' }} />
+              {topHitters.map(({ combo, hits }, i) => {
+                const hitDates = hitDatesMap[combo] || [];
+                const isHovered = hoveredCombo === combo;
+                return (
+                  <div
+                    key={combo}
+                    style={{ position: 'relative' }}
+                    onMouseEnter={() => setHoveredCombo(combo)}
+                    onMouseLeave={() => setHoveredCombo(null)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', cursor: 'default', padding: '2px 0', borderRadius: '4px', background: isHovered ? 'rgba(16,185,129,0.06)' : 'transparent', transition: 'background 0.15s' }}>
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', width: '16px', textAlign: 'right', flexShrink: 0 }}>#{i + 1}</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: '700', color: 'var(--text-main)', letterSpacing: '2px', width: '34px', flexShrink: 0 }}>{toGuideForm(combo)}</span>
+                      <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ width: `${topHitters[0].hits > 0 ? (hits / topHitters[0].hits) * 100 : 0}%`, height: '100%', background: 'var(--primary)', borderRadius: '3px' }} />
+                      </div>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: hitColor(hits), fontWeight: '600', flexShrink: 0, width: '24px', textAlign: 'right' }}>{hits}×</span>
+                      <span style={{ fontSize: '9px', color: 'var(--text-muted)', flexShrink: 0 }}>{digitRangeLabel(combo) === 'high' ? '⬆' : digitRangeLabel(combo) === 'low' ? '⬇' : '↔'}</span>
+                    </div>
+
+                    {/* Date popup on hover */}
+                    {isHovered && hitDates.length > 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '50%', left: 'calc(100% + 10px)',
+                        transform: 'translateY(-50%)',
+                        zIndex: 1000,
+                        minWidth: '200px', maxWidth: '240px',
+                        background: 'rgba(10,16,30,0.98)',
+                        border: '1px solid var(--primary)',
+                        borderRadius: '8px',
+                        padding: '10px 12px',
+                        boxShadow: '0 6px 20px rgba(0,0,0,0.7)',
+                        pointerEvents: 'none',
+                      }}>
+                        <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--primary)', marginBottom: '7px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{toGuideForm(combo)} — {hits} hit{hits !== 1 ? 's' : ''}</span>
+                          <span style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: 'normal' }}>last {effectiveLookback} draws</span>
+                        </div>
+                        <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                          {hitDates.map((h, j) => (
+                            <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0', borderBottom: j < hitDates.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{formatHitDate(h.date)}</span>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: '600', color: 'var(--text-main)', letterSpacing: '1px', marginLeft: '10px' }}>{h.draw}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: hitColor(hits), fontWeight: '600', flexShrink: 0, width: '24px', textAlign: 'right' }}>{hits}×</span>
-                  <span style={{ fontSize: '9px', color: 'var(--text-muted)', flexShrink: 0 }}>{digitRangeLabel(combo) === 'high' ? '⬆' : digitRangeLabel(combo) === 'low' ? '⬇' : '↔'}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Bottom 10 coldest */}
@@ -240,7 +308,7 @@ export default function FrequencyPanel({ draws }) {
               {coldest.map(({ combo, hits }, i) => (
                 <div key={combo} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
                   <span style={{ fontSize: '10px', color: 'var(--text-muted)', width: '16px', textAlign: 'right', flexShrink: 0 }}>#{ranked.length - i}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: '700', color: hits === 0 ? 'var(--danger)' : 'var(--text-main)', letterSpacing: '2px', width: '34px', flexShrink: 0 }}>{combo}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: '700', color: hits === 0 ? 'var(--danger)' : 'var(--text-main)', letterSpacing: '2px', width: '34px', flexShrink: 0 }}>{toGuideForm(combo)}</span>
                   <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
                     <div style={{ width: `${topHitters[0].hits > 0 ? (hits / topHitters[0].hits) * 100 : 0}%`, height: '100%', background: hits === 0 ? 'var(--danger)' : 'rgba(239,68,68,0.5)', borderRadius: '3px' }} />
                   </div>
@@ -310,7 +378,7 @@ export default function FrequencyPanel({ draws }) {
                         }}
                       >
                         <span style={{ fontSize: '9px', color: 'var(--text-muted)', width: '22px', textAlign: 'right', flexShrink: 0 }}>#{rank}</span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: '700', color: 'var(--text-main)', letterSpacing: '2px', flexShrink: 0 }}>{combo}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: '700', color: 'var(--text-main)', letterSpacing: '2px', flexShrink: 0 }}>{toGuideForm(combo)}</span>
                         <span style={{ fontSize: '9px', color: 'var(--text-muted)', flexShrink: 0 }}>
                           {rangeLabel === 'high' ? '⬆' : rangeLabel === 'low' ? '⬇' : '↔'}
                         </span>

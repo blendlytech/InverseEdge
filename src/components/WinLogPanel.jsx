@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { generateMasterList, normalizeDraw, isDoubleOrTriple } from '../utils/AIEngine';
+import { generateMasterList, normalizeDraw, isDoubleOrTriple, toGuideForm } from '../utils/AIEngine';
 import Tooltip from './Tooltip';
 
 const masterSet = new Set(generateMasterList());
@@ -187,7 +187,7 @@ export default function WinLogPanel({ draws }) {
                       <td style={{ padding: '7px 10px' }}>
                         {entry.normalized ? (
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', color: 'var(--primary)', fontWeight: '600', letterSpacing: '2px' }}>
-                            {entry.normalized}
+                            {toGuideForm(entry.normalized)}
                           </span>
                         ) : (
                           <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>—</span>

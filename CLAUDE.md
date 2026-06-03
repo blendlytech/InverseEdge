@@ -33,9 +33,13 @@ src/
   index.css                 Global CSS design tokens (edit tokens here; never add a new token file)
   App.css                   Empty; ignore
 
-  components/
-    PlayGeneratorPanel.jsx  PRIMARY COMPONENT — the 120 master list, gap ranking, top picks, exact bet analyzer
-    HistoryPanel.jsx        Collapsible draw history table (shown below PlayGeneratorPanel)
+  components/   (rendered top → bottom in App.jsx, single scrollable column)
+    DrawEntryPanel.jsx      Manual draw entry form + 120-list hit detection + recent-draws recap
+    BestExactPanel.jsx      HEADLINE — best STRAIGHT/EXACT plays (highest payout). Client's #1 priority
+    PlayGeneratorPanel.jsx  The 120 master list, gap ranking, Top Picks, high-digit picks, exact analyzer
+    FrequencyPanel.jsx      Combo frequency ranking + digit-range (high/low) bias analysis; configurable lookback
+    WinLogPanel.jsx         System tracker — validates draws against the 120 list, gap-when-hit
+    HistoryPanel.jsx        Collapsible raw draw history table
     Tooltip.jsx             Reusable hover tooltip with directional arrow
 
   utils/
@@ -50,6 +54,10 @@ src/
 - `BacktestPanel.jsx` — historical simulation (removed per client brief)
 - `SyncPanel.jsx` — cloud import/export (removed per client brief)
 - `TemperatureChart.jsx` — digit frequency chart (removed per client brief)
+
+### Product priority
+
+The client (Lawrence) plays **box + straight**, but the **straight/exact bet is the goal** — it pays ~$500 vs ~$80 box. `BestExactPanel` is therefore the headline feature: it surfaces the best specific exact numbers to play straight. Everything else supports that decision.
 
 ---
 
@@ -93,9 +101,26 @@ Always import from `../utils/AIEngine`. Never reimplement these:
 | `calculateGapTimes(draws)` | Draws since each digit (0–9) last appeared |
 | `getAIRecommendations(freqs, gaps, count)` | Returns coldest N digits (sorted by gap then frequency) |
 | `getPositionFrequencies(draws, lookback)` | Digit counts per draw position `[pos0, pos1, pos2]` |
+| `scoreComboFrequency(master, draws, lookback)` | Ranks 120 combos by box-hit count; returns `{ranked, validDrawCount, expectedHits}` |
+| `getBestExactOrdering(combo, posFreq, maxPos)` | The single most position-likely exact ordering of a combo |
+| `scoreExactPlays(combos, draws, lookback)` | **Ranks best STRAIGHT plays** — overdue box × most-likely order. Powers BestExactPanel |
 | `runBacktest(draws, config)` | Full historical simulation returning win/loss timeline |
 
 **Doubles/triples** (`"112"`, `"333"`, etc.) are excluded from all analysis — `isDoubleOrTriple(draw)` and `normalizeDraw(draw)` are the guards.
+
+### Box vs Exact (critical distinction)
+
+- **Box combo** = a *set* of 3 distinct digits (order doesn't matter). Internal canonical form is the **sorted** string (`"012"`). All scoring, gap tracking, state, Set/Map keys, and matching use this form.
+- **Exact / straight** = a *specific ordering* (`"210"`, `"021"`…). The 6 permutations are real, meaningful plays — never normalize or guide-map them.
+
+### Display convention: `toGuideForm()` / `GUIDE_MASTER_LIST`
+
+The printed *Inverse Method Guide* lists each box combo as a specific permutation (e.g. `012` is printed `210`). Verified: the guide's 120 normalize to exactly our 120 — identical set, display only.
+
+- **Logic stays on sorted form.** Never key data, state, or lookups off guide form.
+- **Display box combos via `toGuideForm(sortedCombo)`** so the client can cross-reference his printed sheet. Applied in every panel's box-combo display + copy buttons.
+- The 120-list grid in PlayGeneratorPanel iterates **`GUIDE_MASTER_LIST`** (guide order + form); it maps each entry back with `normalizeDraw()` for state lookups.
+- **Exact orderings are shown as-is** (they're the actual straight numbers) — do NOT pass perms through `toGuideForm`.
 
 ---
 

@@ -343,3 +343,101 @@ export function scoreComboFrequency(masterList, draws, lookback) {
     expectedHits: validDraws.length / 120,
   };
 }
+
+/**
+ * The Master List exactly as printed in "The Inverse Method Guide" — each of the
+ * 120 box combinations in the guide's specific permutation AND print order.
+ *
+ * DISPLAY ONLY. Every entry normalizes (sorts) to one of the 120 box combos from
+ * generateMasterList(). All matching/scoring/state must use the sorted box form;
+ * never key data off these strings. Verified identical set to generateMasterList().
+ */
+export const GUIDE_MASTER_LIST = [
+  '210', '310', '203', '321', '410', '402', '421', '403', '413', '432',
+  '510', '502', '521', '530', '513', '532', '540', '541', '542', '543',
+  '610', '602', '621', '630', '631', '632', '604', '641', '642', '643',
+  '650', '615', '652', '653', '654', '701', '720', '721', '730', '713',
+  '732', '740', '714', '742', '743', '750', '751', '752', '735', '754',
+  '760', '761', '726', '763', '764', '765', '810', '802', '812', '830',
+  '831', '832', '804', '841', '842', '843', '850', '851', '852', '853',
+  '854', '860', '861', '826', '863', '864', '865', '807', '871', '827',
+  '873', '874', '875', '876', '910', '902', '921', '930', '931', '932',
+  '940', '941', '942', '943', '950', '951', '952', '935', '954', '960',
+  '961', '962', '982', '938', '984', '958', '986', '978', '963', '946',
+  '965', '970', '971', '927', '973', '974', '957', '976', '908', '981',
+];
+
+// sorted box form -> guide's printed form (e.g. "012" -> "210")
+const GUIDE_FORM_MAP = Object.fromEntries(
+  GUIDE_MASTER_LIST.map(n => [normalizeDraw(n), n])
+);
+
+/**
+ * Converts a sorted box combo ("012") to the form printed in the guide ("210")
+ * for display / cross-reference. Falls back to the input if not found.
+ * @param {string} sortedCombo
+ * @returns {string}
+ */
+export function toGuideForm(sortedCombo) {
+  return GUIDE_FORM_MAP[sortedCombo] || sortedCombo;
+}
+
+/**
+ * Finds the single most-likely EXACT ordering of a box combo, based on which
+ * digit appears most often in each draw position. Because the combo's 3 digits
+ * are all distinct, the result is always a valid non-repeating straight number.
+ *
+ * @param {string} combo  Sorted box combo (e.g. "138")
+ * @param {Array<Record<number,number>>} posFreq  From getPositionFrequencies
+ * @param {number[]} maxPos  Per-position max count (for normalization)
+ * @returns {{ perm: string, posScore: number }}  posScore is 0..1 (higher = more likely order)
+ */
+export function getBestExactOrdering(combo, posFreq, maxPos) {
+  let best = null;
+  getPermutations(combo).forEach(perm => {
+    let posScore = 0;
+    for (let i = 0; i < 3; i++) {
+      posScore += (posFreq[i][perm[i]] || 0) / (maxPos[i] || 1);
+    }
+    posScore /= 3;
+    if (!best || posScore > best.posScore) best = { perm, posScore };
+  });
+  return best;
+}
+
+/**
+ * Ranks the best EXACT (straight) plays across the supplied combos — the highest
+ * payout target. Each combo contributes its single most position-likely ordering.
+ * Score blends:
+ *   • dueScore   — how overdue the box combo is (likely to hit soon)
+ *   • posScore   — how well the chosen order matches recent position trends (likely arrangement)
+ *
+ * @param {string[]} combos    Active box combos (sorted form)
+ * @param {string[]} draws     Raw draw strings newest-first
+ * @param {number}   lookback  Draws to scan
+ * @returns {Array<{exact,combo,boxGap,boxFreq,posScore,dueScore,score}>} best-first
+ */
+export function scoreExactPlays(combos, draws, lookback = 60) {
+  const posFreq = getPositionFrequencies(draws, lookback);
+  const maxPos = posFreq.map(f => Math.max(1, ...Object.values(f)));
+
+  const gapMap = {};
+  scoreComboGaps(combos, draws, lookback).forEach(s => { gapMap[s.combo] = s; });
+
+  return combos.map(combo => {
+    const g = gapMap[combo] || { lastHit: 999, frequency: 0 };
+    const boxGap = g.lastHit;
+    const dueScore = boxGap === 999 ? 1 : Math.min(boxGap / lookback, 1);
+    const best = getBestExactOrdering(combo, posFreq, maxPos);
+    const score = dueScore * 0.6 + best.posScore * 0.4;
+    return {
+      exact: best.perm,
+      combo,
+      boxGap,
+      boxFreq: g.frequency,
+      posScore: best.posScore,
+      dueScore,
+      score,
+    };
+  }).sort((a, b) => b.score - a.score);
+}

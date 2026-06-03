@@ -6,6 +6,8 @@ import {
   scoreStraightPermutations,
   scoreComboGaps,
   getPositionFrequencies,
+  toGuideForm,
+  GUIDE_MASTER_LIST,
 } from '../utils/AIEngine';
 import Tooltip from './Tooltip';
 
@@ -59,6 +61,14 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
 
   // Combos completely absent from the entire lookback window (sentinel 999)
   const criticalOverdue = scoredActive.filter(s => s.lastHit === 999);
+
+  // High-digit combos: all 3 digits are 5–9 (the 10 combos confirmed to hit ~2× more often)
+  const highDigitActive = scoredActive.filter(s => s.combo.split('').every(d => parseInt(d, 10) >= 5));
+  const highDigitTopPicks = highDigitActive.slice(0, 3).map(({ combo, lastHit }) => ({
+    combo,
+    lastHit,
+    perms: scoreStraightPermutations(combo, drawStrings, lookback),
+  }));
 
   // Digit frequency per draw position — drives the Position Guide
   const posFreqs = getPositionFrequencies(drawStrings, lookback);
@@ -178,7 +188,7 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
                   style={{ fontFamily: 'var(--font-mono)', fontWeight: '700', color: 'var(--secondary)', cursor: 'pointer', marginRight: '8px' }}
                   title="Click to open Exact Bet Analyzer"
                 >
-                  {s.combo}
+                  {toGuideForm(s.combo)}
                 </span>
               ))}
               {criticalOverdue.length > 8 && <span style={{ color: 'var(--text-muted)' }}>+{criticalOverdue.length - 8} more</span>}
@@ -216,14 +226,14 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
                       #{pickIdx + 1} Pick — Box Bet
                     </div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '32px', fontWeight: 'bold', color: 'var(--text-main)', letterSpacing: '5px', lineHeight: 1 }}>
-                      {combo}
+                      {toGuideForm(combo)}
                     </div>
                     <div style={{ fontSize: '11px', marginTop: '4px', color: lastHit === 999 ? 'var(--primary)' : 'var(--text-muted)', fontWeight: lastHit === 999 ? '600' : 'normal' }}>
                       Box overdue: {lastHit === 999 ? '∞ draws — OVERDUE' : `${lastHit} draws ago`}
                     </div>
                   </div>
                   <button
-                    onClick={() => { navigator.clipboard.writeText(combo); alert(`📋 ${combo} (box) copied!`); }}
+                    onClick={() => { navigator.clipboard.writeText(toGuideForm(combo)); alert(`📋 ${toGuideForm(combo)} (box) copied!`); }}
                     style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', padding: '4px 8px', borderRadius: '5px', cursor: 'pointer', fontSize: '10px', flexShrink: 0 }}
                   >
                     📋 Copy Box
@@ -268,7 +278,125 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
 
                 {/* Bet tip */}
                 <div style={{ marginTop: '10px', fontSize: '10px', color: 'var(--text-muted)', lineHeight: '1.5', padding: '7px 9px', background: 'rgba(0,0,0,0.2)', borderRadius: '5px' }}>
-                  💡 Play <strong style={{ color: 'var(--text-main)' }}>{combo}</strong> as <strong>$0.50 box</strong> (any order) + the <strong style={{ color: 'var(--primary)' }}>★ overdue</strong> ordering as <strong>$0.50 straight</strong> (exact). $1 total — doubles your money on box, ~250× on exact.
+                  💡 Play <strong style={{ color: 'var(--text-main)' }}>{toGuideForm(combo)}</strong> as <strong>$0.50 box</strong> (any order) + the <strong style={{ color: 'var(--primary)' }}>★ overdue</strong> ordering as <strong>$0.50 straight</strong> (exact). $1 total — doubles your money on box, ~250× on exact.
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── HIGH-DIGIT PRIORITY PICKS ──────────────────────────────────── */}
+      {highDigitTopPicks.length > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(234,179,8,0.08), rgba(251,191,36,0.03))',
+          border: '1px solid rgba(234,179,8,0.35)', borderRadius: '12px',
+          padding: '16px', marginBottom: '24px',
+        }}>
+          <h3 style={{ color: 'var(--secondary)', fontSize: '14px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'flex', alignItems: 'center' }}>
+            ⬆ High-Digit Priority Picks
+            <Tooltip text="Focuses exclusively on the 10 combinations where ALL 3 digits are 5–9 (567, 568, 569, 578, 579, 589, 678, 679, 689, 789). Data shows these combos hit roughly twice as often as low-digit combos. The most overdue ones among this group are your strongest plays — a proven frequent hitter that's currently due.">
+              <HelpIcon />
+            </Tooltip>
+          </h3>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px', lineHeight: '1.5' }}>
+            All-high-digit combos (digits 5–9 only) — confirmed to hit ~2× more often. Most overdue shown first.
+          </p>
+
+          {/* All 10 high-digit combos at a glance */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }}>
+            {scoredActive
+              .filter(s => s.combo.split('').every(d => parseInt(d, 10) >= 5))
+              .concat(
+                // Also show recently-drawn high-digit combos (greyed) so all 10 are visible
+                scored
+                  .filter(s => s.combo.split('').every(d => parseInt(d, 10) >= 5) && recentlyDrawn.has(s.combo))
+              )
+              .map(({ combo, lastHit }) => {
+                const isExcluded = recentlyDrawn.has(combo);
+                const isOverdue  = lastHit === 999;
+                return (
+                  <div
+                    key={combo}
+                    onClick={() => { if (!isExcluded) setSelectedCombo(selectedCombo === combo ? null : combo); }}
+                    style={{
+                      padding: '5px 10px', borderRadius: '6px', textAlign: 'center', cursor: isExcluded ? 'default' : 'pointer',
+                      background: isExcluded ? 'rgba(0,0,0,0.2)' : isOverdue ? 'rgba(234,179,8,0.15)' : 'rgba(234,179,8,0.06)',
+                      border: `1px solid ${isExcluded ? 'rgba(255,255,255,0.05)' : isOverdue ? 'rgba(234,179,8,0.5)' : 'rgba(234,179,8,0.25)'}`,
+                      opacity: isExcluded ? 0.4 : 1,
+                    }}
+                  >
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '15px', fontWeight: 'bold', color: isExcluded ? 'var(--text-muted)' : 'var(--text-main)', letterSpacing: '2px' }}>
+                      {toGuideForm(combo)}
+                    </div>
+                    <div style={{ fontSize: '8px', marginTop: '2px', color: isOverdue ? 'var(--secondary)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontWeight: isOverdue ? '700' : 'normal' }}>
+                      {isExcluded ? 'recent' : isOverdue ? '∞' : `${lastHit}d`}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+
+          {/* Top 3 high-digit picks with exact orderings */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+            {highDigitTopPicks.map(({ combo, lastHit, perms }, pickIdx) => (
+              <div key={combo} style={{
+                background: pickIdx === 0 ? 'rgba(234,179,8,0.1)' : 'rgba(0,0,0,0.25)',
+                border: pickIdx === 0 ? '1px solid rgba(234,179,8,0.4)' : '1px solid rgba(255,255,255,0.07)',
+                borderRadius: '10px', padding: '12px',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                  <div>
+                    <div style={{ fontSize: '10px', color: 'var(--secondary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>
+                      #{pickIdx + 1} High-Digit Pick
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '28px', fontWeight: 'bold', color: 'var(--text-main)', letterSpacing: '4px', lineHeight: 1 }}>
+                      {toGuideForm(combo)}
+                    </div>
+                    <div style={{ fontSize: '10px', marginTop: '3px', color: lastHit === 999 ? 'var(--secondary)' : 'var(--text-muted)', fontWeight: lastHit === 999 ? '600' : 'normal' }}>
+                      {lastHit === 999 ? '∞ draws — OVERDUE' : `${lastHit} draws ago`}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(toGuideForm(combo)); alert(`📋 ${toGuideForm(combo)} copied!`); }}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', padding: '3px 7px', borderRadius: '5px', cursor: 'pointer', fontSize: '10px', flexShrink: 0 }}
+                  >
+                    📋 Box
+                  </button>
+                </div>
+
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
+                  All 6 Exact Orderings
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px' }}>
+                  {perms.map(({ perm, lastHit: ph }) => {
+                    const isOverdue = ph === 999;
+                    const isHot     = !isOverdue && ph <= 10;
+                    return (
+                      <div key={perm} style={{
+                        textAlign: 'center', padding: '6px 4px', borderRadius: '5px',
+                        background: isOverdue ? 'rgba(234,179,8,0.15)' : isHot ? 'rgba(239,68,68,0.07)' : 'rgba(0,0,0,0.2)',
+                        border: `1px solid ${isOverdue ? 'rgba(234,179,8,0.5)' : isHot ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.05)'}`,
+                      }}>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: 'bold', color: isOverdue ? 'var(--secondary)' : 'var(--text-main)', letterSpacing: '2px' }}>
+                          {perm}
+                        </div>
+                        <div style={{ fontSize: '8px', marginTop: '2px', color: isOverdue ? 'var(--secondary)' : isHot ? 'var(--danger)' : 'var(--text-muted)', fontWeight: isOverdue ? '700' : 'normal' }}>
+                          {isOverdue ? '★ OVERDUE' : isHot ? `⚡ ${ph}d` : `${ph}d`}
+                        </div>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(perm); alert(`📋 ${perm} copied!`); }}
+                          style={{ marginTop: '2px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '9px' }}
+                        >
+                          📋
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ marginTop: '9px', fontSize: '10px', color: 'var(--text-muted)', lineHeight: '1.4', padding: '6px 8px', background: 'rgba(0,0,0,0.2)', borderRadius: '5px' }}>
+                  💡 High-frequency combo + currently overdue = highest confidence play. Box + ★ straight for full coverage.
                 </div>
               </div>
             ))}
@@ -287,7 +415,18 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
           const max = entries[0]?.[1] || 1;
           return { entries, max, hotDigit: entries[0]?.[0] };
         });
-        const suggested = positions.map(p => p.hotDigit).join('');
+        // Build suggested straight using the hottest UNIQUE digit per position
+        // (skip any digit already chosen for a prior position to prevent doubles)
+        const chosen = [];
+        const suggestedDigits = positions.map(({ entries }) => {
+          const pair = entries.find(([d]) => !chosen.includes(d));
+          const digit = pair !== undefined ? pair[0] : null;
+          if (digit !== null) chosen.push(digit);
+          return digit;
+        });
+        const suggested = suggestedDigits.every(d => d !== null)
+          ? suggestedDigits.join('')
+          : null;
 
         return (
           <div style={{ marginBottom: '24px' }}>
@@ -331,17 +470,25 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                💡 <strong style={{ color: 'var(--text-main)' }}>Suggested straight ordering</strong> (hottest digit per position):
+                💡 <strong style={{ color: 'var(--text-main)' }}>Suggested straight ordering</strong> (hottest unique digit per position — no doubles):
               </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '24px', fontWeight: 'bold', color: 'var(--primary)', letterSpacing: '5px' }}>
-                {suggested}
-              </span>
-              <button
-                onClick={() => { navigator.clipboard.writeText(suggested); alert(`📋 ${suggested} copied!`); }}
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', padding: '4px 10px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px' }}
-              >
-                📋 Copy
-              </button>
+              {suggested ? (
+                <>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '24px', fontWeight: 'bold', color: 'var(--primary)', letterSpacing: '5px' }}>
+                    {suggested}
+                  </span>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(suggested); alert(`📋 ${suggested} copied!`); }}
+                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', padding: '4px 10px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px' }}
+                    >
+                      📋 Copy
+                    </button>
+                  </>
+              ) : (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                  Not enough draw data yet to suggest a unique ordering.
+                </span>
+              )}
               <span style={{ fontSize: '11px', color: 'var(--text-muted)', flex: 1 }}>
                 Cross-reference with your Top Pick's exact orderings — if this matches a ★ OVERDUE ordering, that's your highest-confidence straight bet.
               </span>
@@ -369,7 +516,7 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
               Show excluded
             </label>
             <button
-              onClick={() => { navigator.clipboard.writeText(activeCombos.join(', ')); alert(`📋 ${activeCombos.length} active combos copied!`); }}
+              onClick={() => { navigator.clipboard.writeText(activeCombos.map(toGuideForm).join(', ')); alert(`📋 ${activeCombos.length} active combos copied!`); }}
               className="btn btn-secondary btn-small"
               style={{ fontSize: '11px', padding: '5px 10px' }}
             >
@@ -379,13 +526,15 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
         </div>
 
         <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px', lineHeight: '1.6' }}>
+          Shown in guide order &amp; form for line-by-line cross-reference. &nbsp;
           <span style={{ color: 'var(--primary)', fontWeight: '600' }}>∞</span> = overdue (not seen in scan window) &nbsp;·&nbsp;
           <span style={{ color: 'var(--danger)', fontWeight: '600' }}>red</span> = appeared recently &nbsp;·&nbsp;
           <span style={{ color: 'var(--text-main)' }}>click any combo</span> for exact ordering analysis
         </div>
 
         <div className="comb-list-container">
-          {masterList.map(combo => {
+          {GUIDE_MASTER_LIST.map(guideNum => {
+            const combo = normalizeDraw(guideNum); // sorted box form drives all logic
             const isExcluded = recentlyDrawn.has(combo);
             if (isExcluded && !showRecentlyDrawn) return null;
             const isSelected = selectedCombo === combo;
@@ -395,7 +544,7 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
 
             return (
               <div
-                key={combo}
+                key={guideNum}
                 className={`comb-badge ${isExcluded ? 'filtered' : ''}`}
                 title={isExcluded ? 'Recently drawn — excluded from play sheet' : 'Click to analyze all 6 exact orderings'}
                 onClick={() => { if (!isExcluded) setSelectedCombo(isSelected ? null : combo); }}
@@ -405,7 +554,7 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
                   ...(isSelected ? { borderColor: 'var(--primary)', boxShadow: '0 0 8px rgba(16,185,129,0.5)', color: 'var(--primary)' } : {}),
                 }}
               >
-                <span>{combo}</span>
+                <span>{guideNum}</span>
                 {gap && (
                   <span style={{
                     display: 'block', fontSize: '8px', marginTop: '1px', lineHeight: 1,
@@ -429,7 +578,7 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
             <h3 style={{ color: 'var(--primary)', fontSize: '15px', margin: 0, display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               🎯 Exact Bet Analyzer
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '22px', color: 'var(--text-main)', background: 'rgba(255,255,255,0.06)', padding: '2px 14px', borderRadius: '6px', letterSpacing: '4px' }}>
-                {selectedCombo}
+                {toGuideForm(selectedCombo)}
               </span>
               <Tooltip text="Pick-3 pays roughly $500 on a $1 straight (exact order) bet vs $80 on a $1 box (any order) bet. All 6 cards below show every possible exact ordering of this combination, ranked from most overdue to most recently hit. Bet the ★ OVERDUE card as your straight to maximize return.">
                 <HelpIcon />
@@ -475,7 +624,7 @@ export default function PlayGeneratorPanel({ draws, historyFilterDays, setHistor
           </div>
 
           <p style={{ marginTop: '14px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.7', padding: '10px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
-            💡 <strong style={{ color: 'var(--text-main)' }}>Bet Strategy:</strong> Play <strong style={{ color: 'var(--primary)' }}>{selectedCombo}</strong> as a <strong>$0.50 box</strong> (any order, ~$40 payout) + the <strong style={{ color: 'var(--primary)' }}>★ OVERDUE</strong> ordering as a <strong>$0.50 straight</strong> (exact order, ~$250 payout). Total cost: <strong>$1.00</strong>. Box hit = double your money. Exact hit = ~250× your straight stake.
+            💡 <strong style={{ color: 'var(--text-main)' }}>Bet Strategy:</strong> Play <strong style={{ color: 'var(--primary)' }}>{toGuideForm(selectedCombo)}</strong> as a <strong>$0.50 box</strong> (any order, ~$40 payout) + the <strong style={{ color: 'var(--primary)' }}>★ OVERDUE</strong> ordering as a <strong>$0.50 straight</strong> (exact order, ~$250 payout). Total cost: <strong>$1.00</strong>. Box hit = double your money. Exact hit = ~250× your straight stake.
           </p>
         </div>
       )}

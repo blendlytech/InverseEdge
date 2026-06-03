@@ -5,6 +5,7 @@ import {
   isDoubleOrTriple,
   applyHistoryFilter,
   scoreComboGaps,
+  toGuideForm,
 } from '../utils/AIEngine';
 import Tooltip from './Tooltip';
 
@@ -247,7 +248,7 @@ export default function DrawEntryPanel({ draws, onAddDraw, historyFilterDays }) 
                         🎉 Top Pick #{lastResult.matchedPick.rank} Hit!
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                        <strong style={{ color: 'var(--text-main)' }}>{lastResult.normalized}</strong> was your <strong>#{lastResult.matchedPick.rank} most overdue pick</strong>. If you played it, you collected on the box — and on the straight if your exact ordering matched.
+                        <strong style={{ color: 'var(--text-main)' }}>{toGuideForm(lastResult.normalized)}</strong> was your <strong>#{lastResult.matchedPick.rank} most overdue pick</strong>. If you played it, you collected on the box — and on the straight if your exact ordering matched.
                       </div>
                     </>
                   ) : lastResult.onMasterList ? (
@@ -256,7 +257,7 @@ export default function DrawEntryPanel({ draws, onAddDraw, historyFilterDays }) 
                         ✓ On the 120 Master List
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                        Box combo: <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-main)' }}>{lastResult.normalized}</strong> — this combination is in the system. It was not a current top pick but is tracked in the master list.
+                        Box combo: <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-main)' }}>{toGuideForm(lastResult.normalized)}</strong> — this combination is in the system. It was not a current top pick but is tracked in the master list.
                       </div>
                     </>
                   ) : null}
@@ -317,7 +318,7 @@ export default function DrawEntryPanel({ draws, onAddDraw, historyFilterDays }) 
                         </div>
                       )}
                       <div style={{ fontSize: '9px', color: isDouble ? 'var(--secondary)' : 'var(--text-muted)', marginTop: '3px', fontFamily: 'var(--font-mono)', letterSpacing: '1px' }}>
-                        {isDouble ? 'dbl/trpl' : onList ? normalized : '?'}
+                        {isDouble ? 'dbl/trpl' : onList ? toGuideForm(normalized) : '?'}
                       </div>
                     </div>
                   );

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import DrawEntryPanel from './components/DrawEntryPanel';
+import BestExactPanel from './components/BestExactPanel';
 import FrequencyPanel from './components/FrequencyPanel';
 import HistoryPanel from './components/HistoryPanel';
 import PlayGeneratorPanel from './components/PlayGeneratorPanel';
@@ -1599,6 +1600,11 @@ export default function App() {
         <DrawEntryPanel
           draws={draws}
           onAddDraw={handleAddDraw}
+          historyFilterDays={historyFilterDays}
+        />
+
+        <BestExactPanel
+          draws={draws}
           historyFilterDays={historyFilterDays}
         />
 
