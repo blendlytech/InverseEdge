@@ -345,6 +345,274 @@ export function scoreComboFrequency(masterList, draws, lookback) {
 }
 
 /**
+ * True only when all three digits are identical (e.g. "333").
+ * @param {string} draw
+ * @returns {boolean}
+ */
+export function isTriple(draw) {
+  if (!draw || draw.length !== 3) return false;
+  return draw[0] === draw[1] && draw[1] === draw[2];
+}
+
+/**
+ * True only when exactly two of the three digits match (e.g. "112", "522").
+ * Triples ("333") are NOT doubles.
+ * @param {string} draw
+ * @returns {boolean}
+ */
+export function isDouble(draw) {
+  return isDoubleOrTriple(draw) && !isTriple(draw);
+}
+
+/**
+ * Given a sorted index list of where an event occurred within a newest-first
+ * window, derive its gap statistics. Index 0 = most recent draw.
+ *
+ * @param {number[]} idxArray  Indices (draws-ago) where the event occurred, ascending
+ * @param {number}   total     Total draws scanned in the window
+ * @returns {{count:number, rate:number, currentGap:number, avgGap:(number|null), maxDrought:number}}
+ *   currentGap — draws since the event last occurred (=total if it never did)
+ *   avgGap     — average draws between occurrences (null if it never occurred)
+ *   maxDrought — longest run of consecutive draws without the event
+ */
+export function computeGapStats(idxArray, total) {
+  const count = idxArray.length;
+  const rate = total ? count / total : 0;
+  const currentGap = count ? idxArray[0] : total;
+  const avgGap = count ? total / count : null;
+
+  let maxDrought = 0;
+  let prev = -1;
+  idxArray.forEach(idx => {
+    const gap = idx - prev - 1; // draws strictly between this and the previous occurrence
+    if (gap > maxDrought) maxDrought = gap;
+    prev = idx;
+  });
+  const trailing = total - 1 - prev; // run from the oldest occurrence to the window edge
+  if (trailing > maxDrought) maxDrought = trailing;
+
+  return { count, rate, currentGap, avgGap, maxDrought };
+}
+
+/**
+ * Scans a window of draws for double/triple patterns — the structural events the
+ * core Inverse Method deliberately excludes. Powers PatternScanPanel.
+ *
+ * Pick-3 straight baselines (for reference, true random draw):
+ *   • single (no repeat) = 720/1000 = 72%
+ *   • double             = 270/1000 = 27%
+ *   • triple             =  10/1000 =  1%
+ *
+ * @param {string[]} draws  Raw draw strings, newest-first, already windowed by the caller
+ * @returns {{
+ *   total:number, doubleCount:number, tripleCount:number, singleCount:number,
+ *   doubleStats:object, tripleStats:object, anyStats:object,
+ *   doubleDigitFreq:Record<number,number>, topPairs:Array<[string,number]>
+ * }}
+ */
+export function scanDoubleTriplePatterns(draws) {
+  const valid = draws.filter(d => d && d.length === 3);
+  const total = valid.length;
+
+  const doubleDigitFreq = {};
+  for (let i = 0; i <= 9; i++) doubleDigitFreq[i] = 0;
+  const pairFreq = {};
+
+  const doubleIdx = [];
+  const tripleIdx = [];
+  const anyIdx = [];
+
+  let doubleCount = 0;
+  let tripleCount = 0;
+  let singleCount = 0;
+
+  valid.forEach((draw, i) => {
+    if (isTriple(draw)) {
+      tripleCount++;
+      tripleIdx.push(i);
+      anyIdx.push(i);
+      const d = draw[0];
+      doubleDigitFreq[d]++;
+      const key = `${d}${d}${d}`;
+      pairFreq[key] = (pairFreq[key] || 0) + 1;
+    } else if (isDouble(draw)) {
+      doubleCount++;
+      doubleIdx.push(i);
+      anyIdx.push(i);
+      const counts = {};
+      draw.split('').forEach(c => { counts[c] = (counts[c] || 0) + 1; });
+      const repeated = Object.keys(counts).find(k => counts[k] === 2);
+      doubleDigitFreq[repeated]++;
+      const key = `${repeated}${repeated}`;
+      pairFreq[key] = (pairFreq[key] || 0) + 1;
+    } else {
+      singleCount++;
+    }
+  });
+
+  return {
+    total,
+    doubleCount,
+    tripleCount,
+    singleCount,
+    doubleStats: computeGapStats(doubleIdx, total),
+    tripleStats: computeGapStats(tripleIdx, total),
+    anyStats: computeGapStats(anyIdx, total),
+    doubleDigitFreq,
+    topPairs: Object.entries(pairFreq).sort((a, b) => b[1] - a[1]),
+  };
+}
+
+/**
+ * Sum of a draw's three digits (0–27).
+ * @param {string} draw
+ * @returns {number}
+ */
+export function digitSum(draw) {
+  if (!draw || draw.length !== 3) return 0;
+  return draw.split('').reduce((s, c) => s + (parseInt(c, 10) || 0), 0);
+}
+
+/**
+ * Scans a window of draws for sum and structure patterns:
+ *   • digit-sum distribution (0–27) + average and most common sum
+ *   • high/low split — digits 5–9 are "high", 0–4 are "low" (count of high digits 0–3)
+ *   • even/odd split — count of even digits 0–3
+ *
+ * Analyzes every valid 3-digit draw (doubles/triples included — sum and parity
+ * apply to any draw). Powers the Sum & Structure section of PatternScanPanel.
+ *
+ * @param {string[]} draws  Raw draw strings, newest-first, already windowed by the caller
+ * @returns {{
+ *   total:number, sumCounts:number[], avgSum:number,
+ *   mostCommonSum:number, mostCommonSumCount:number,
+ *   highCounts:number[], evenCounts:number[]
+ * }}  highCounts/evenCounts are length-4 arrays indexed by how many digits qualify (0–3)
+ */
+export function scanSumStructurePatterns(draws) {
+  const valid = draws.filter(d => d && d.length === 3);
+  const total = valid.length;
+
+  const sumCounts = new Array(28).fill(0);
+  const highCounts = [0, 0, 0, 0];
+  const evenCounts = [0, 0, 0, 0];
+  let sumTotal = 0;
+
+  valid.forEach(draw => {
+    const digits = draw.split('').map(Number);
+    const s = digits.reduce((a, b) => a + b, 0);
+    sumCounts[s]++;
+    sumTotal += s;
+    highCounts[digits.filter(d => d >= 5).length]++;
+    evenCounts[digits.filter(d => d % 2 === 0).length]++;
+  });
+
+  let mostCommonSum = 0;
+  let mostCommonSumCount = 0;
+  sumCounts.forEach((c, s) => {
+    if (c > mostCommonSumCount) { mostCommonSumCount = c; mostCommonSum = s; }
+  });
+
+  return {
+    total,
+    sumCounts,
+    avgSum: total ? sumTotal / total : 0,
+    mostCommonSum,
+    mostCommonSumCount,
+    highCounts,
+    evenCounts,
+  };
+}
+
+/**
+ * Scans a window of draws for repeat and run patterns:
+ *   • digit carryover — how many digits a draw shares with the one immediately before it
+ *   • carryover streaks — consecutive draws that each share ≥1 digit with the prior draw
+ *   • back-to-back repeats — the same box combo (or exact number) twice in a row
+ *   • quick returns — a box combo that reappears within `quickWindow` draws
+ *
+ * Draws are newest-first; the "previous draw" for valid[i] is valid[i+1].
+ * Powers the Repeats & Runs section of PatternScanPanel.
+ *
+ * @param {string[]} draws       Raw draw strings, newest-first, already windowed
+ * @param {number}   quickWindow How close a box repeat must be to count as a "quick return"
+ * @returns {{
+ *   total:number, transitions:number,
+ *   carryoverCounts:number[], avgCarryover:number,
+ *   currentCarryStreak:number, longestCarryStreak:number,
+ *   backToBackBox:number, backToBackExact:number,
+ *   quickWindow:number, quickReturns:number,
+ *   quickExamples:Array<{draw:string, gap:number}>
+ * }}  carryoverCounts is length-4, indexed by shared-digit count (0–3)
+ */
+export function scanRepeatsAndRuns(draws, quickWindow = 5) {
+  const valid = draws.filter(d => d && d.length === 3);
+  const total = valid.length;
+  const transitions = Math.max(0, total - 1);
+
+  const carryoverCounts = [0, 0, 0, 0];
+  const carryFlags = []; // newest-first, true when a transition shares ≥1 digit
+  let carrySum = 0;
+
+  for (let i = 0; i < total - 1; i++) {
+    const cur = new Set(valid[i].split(''));
+    const prev = new Set(valid[i + 1].split(''));
+    let shared = 0;
+    cur.forEach(d => { if (prev.has(d)) shared++; });
+    carryoverCounts[shared]++;
+    carrySum += shared;
+    carryFlags.push(shared >= 1);
+  }
+
+  const avgCarryover = transitions ? carrySum / transitions : 0;
+
+  let currentCarryStreak = 0;
+  for (let i = 0; i < carryFlags.length; i++) {
+    if (carryFlags[i]) currentCarryStreak++; else break;
+  }
+
+  let longestCarryStreak = 0;
+  let run = 0;
+  carryFlags.forEach(f => {
+    if (f) { run++; if (run > longestCarryStreak) longestCarryStreak = run; } else { run = 0; }
+  });
+
+  let backToBackBox = 0;
+  let backToBackExact = 0;
+  for (let i = 0; i < total - 1; i++) {
+    if (valid[i] === valid[i + 1]) backToBackExact++;
+    if (normalizeDraw(valid[i]) === normalizeDraw(valid[i + 1])) backToBackBox++;
+  }
+
+  let quickReturns = 0;
+  const quickExamples = [];
+  for (let i = 0; i < total; i++) {
+    const norm = normalizeDraw(valid[i]);
+    for (let j = i + 1; j <= i + quickWindow && j < total; j++) {
+      if (normalizeDraw(valid[j]) === norm) {
+        quickReturns++;
+        if (quickExamples.length < 8) quickExamples.push({ draw: valid[i], gap: j - i });
+        break; // count each draw at most once
+      }
+    }
+  }
+
+  return {
+    total,
+    transitions,
+    carryoverCounts,
+    avgCarryover,
+    currentCarryStreak,
+    longestCarryStreak,
+    backToBackBox,
+    backToBackExact,
+    quickWindow,
+    quickReturns,
+    quickExamples,
+  };
+}
+
+/**
  * The Master List exactly as printed in "The Inverse Method Guide" — each of the
  * 120 box combinations in the guide's specific permutation AND print order.
  *
@@ -440,4 +708,57 @@ export function scoreExactPlays(combos, draws, lookback = 60) {
       score,
     };
   }).sort((a, b) => b.score - a.score);
+}
+
+/**
+ * TIME MACHINE — replays the live recommendation engine as it would have stood
+ * immediately BEFORE the draw at `index`, then grades it against the actual result.
+ *
+ * Only draws strictly older than `index` are used (draws.slice(index + 1)) — exactly
+ * what the system would have known at the time, with no look-ahead. Mirrors the live
+ * panels: BestExactPanel (applyHistoryFilter → scoreExactPlays) and PlayGeneratorPanel's
+ * Today's Top Picks (scoreComboGaps over the same active list).
+ *
+ * @param {Array<{date:string, draw:string}>} draws  Newest-first
+ * @param {number} index  Index of the draw to evaluate (0 = most recent)
+ * @param {Object} config { lookback=28, historyFilterDays=14, exactCount=3, boxCount=3 }
+ * @returns {{
+ *   actual:object|null, actualBox:string, isDoubleTriple:boolean, pastCount:number,
+ *   lookback:number, historyFilterDays:number, activeCount:number,
+ *   exactPlays:Array, boxPicks:Array,
+ *   exactHit:boolean, exactBoxHit:boolean, boxPickHit:boolean, inActive:boolean
+ * }}
+ */
+export function replaySystemPick(draws, index, config = {}) {
+  const { lookback = 28, historyFilterDays = 14, exactCount = 3, boxCount = 3 } = config;
+
+  const actual = draws[index] || null;
+  const pastStrings = draws.slice(index + 1).map(d => d.draw);
+
+  const masterList = generateMasterList();
+  const active = applyHistoryFilter(masterList, pastStrings, historyFilterDays);
+  const activeSet = new Set(active);
+
+  const exactPlays = scoreExactPlays(active, pastStrings, lookback).slice(0, exactCount);
+  const boxPicks = scoreComboGaps(active, pastStrings, lookback).slice(0, boxCount);
+
+  const actualDraw = actual ? actual.draw : '';
+  const isDoubleTriple = isDoubleOrTriple(actualDraw);
+  const actualBox = isDoubleTriple ? '' : normalizeDraw(actualDraw);
+
+  return {
+    actual,
+    actualBox,
+    isDoubleTriple,
+    pastCount: pastStrings.length,
+    lookback,
+    historyFilterDays,
+    activeCount: active.length,
+    exactPlays,
+    boxPicks,
+    exactHit: exactPlays.some(p => p.exact === actualDraw),
+    exactBoxHit: !isDoubleTriple && exactPlays.some(p => p.combo === actualBox),
+    boxPickHit: !isDoubleTriple && boxPicks.some(p => p.combo === actualBox),
+    inActive: !isDoubleTriple && activeSet.has(actualBox),
+  };
 }

@@ -4,6 +4,8 @@ import BestExactPanel from './components/BestExactPanel';
 import FrequencyPanel from './components/FrequencyPanel';
 import HistoryPanel from './components/HistoryPanel';
 import PlayGeneratorPanel from './components/PlayGeneratorPanel';
+import PatternScanPanel from './components/PatternScanPanel';
+import TimeMachinePanel from './components/TimeMachinePanel';
 import WinLogPanel from './components/WinLogPanel';
 import { supabase } from './utils/supabaseClient';
 // High-quality mock history (last 50 drawings)
@@ -1637,7 +1639,11 @@ export default function App() {
 
         <FrequencyPanel draws={draws} />
 
+        <PatternScanPanel draws={draws} />
+
         <WinLogPanel draws={draws} />
+
+        <TimeMachinePanel draws={draws} historyFilterDays={historyFilterDays} />
 
         {/* Collapsible draw history */}
         <div className="glass-card" style={{ padding: '14px 18px' }}>
