@@ -763,6 +763,212 @@ export function replaySystemPick(draws, index, config = {}) {
   };
 }
 
+// ── Statistics helpers (shared by the Fairness Monitor & adaptive recommender) ──
+
+function erf(x) {
+  const t = 1 / (1 + 0.3275911 * Math.abs(x));
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return x >= 0 ? y : -y;
+}
+
+/** Standard normal CDF. */
+export function normalCdf(z) {
+  return 0.5 * (1 + erf(z / Math.SQRT2));
+}
+
+/** Upper-tail p-value for a chi-square statistic (Wilson–Hilferty approximation). */
+export function chiSquarePValue(X, k) {
+  if (k <= 0 || X <= 0) return 1;
+  const z = (Math.cbrt(X / k) - (1 - 2 / (9 * k))) / Math.sqrt(2 / (9 * k));
+  return 1 - normalCdf(z);
+}
+
+/**
+ * FAIRNESS MONITOR — runs a battery of randomness/bias tests on the real draws and
+ * applies Benjamini–Hochberg FDR correction so noise doesn't masquerade as signal.
+ * This is the ONLY legitimate path to an edge: if the lottery ever stops being fair,
+ * a corrected, significant anomaly appears here.
+ *
+ * @param {Array<{date:string, draw:string}>} draws  Newest-first
+ * @param {number} alpha  False-discovery rate (default 0.05)
+ * @returns {{ tests:Array, n:number, m:number, alpha:number, anomalies:Array, anyAnomaly:boolean, minP:number, insufficient:boolean }}
+ */
+export function runFairnessTests(draws, alpha = 0.05) {
+  const objs = (draws || []).filter(d => d && d.draw && d.draw.length === 3);
+  const strings = objs.map(d => d.draw);
+  const N = strings.length;
+  if (N < 20) return { tests: [], n: N, m: 0, alpha, anomalies: [], anyAnomaly: false, minP: 1, insufficient: true };
+
+  const tests = [];
+  const digitChi = (arr, getDigit) => {
+    const f = new Array(10).fill(0);
+    arr.forEach(s => f[+getDigit(s)]++);
+    const e = arr.length / 10;
+    let c = 0;
+    f.forEach(o => { c += (o - e) ** 2 / e; });
+    return c;
+  };
+
+  // 1) Overall digit frequency
+  {
+    const f = new Array(10).fill(0);
+    strings.forEach(s => s.split('').forEach(ch => f[+ch]++));
+    const e = (3 * N) / 10;
+    let c = 0;
+    f.forEach(o => { c += (o - e) ** 2 / e; });
+    tests.push({ name: 'Digit frequency (all positions)', stat: c, kind: 'chi2', df: 9, p: chiSquarePValue(c, 9) });
+  }
+  // 2–4) Per-position digit frequency
+  for (let pos = 0; pos < 3; pos++) {
+    const c = digitChi(strings, s => s[pos]);
+    tests.push({ name: `Position ${pos + 1} digit frequency`, stat: c, kind: 'chi2', df: 9, p: chiSquarePValue(c, 9) });
+  }
+  // 5) Structure goodness-of-fit
+  {
+    let s1 = 0, d2 = 0, t3 = 0;
+    strings.forEach(s => { const u = new Set(s.split('')).size; if (u === 3) s1++; else if (u === 2) d2++; else t3++; });
+    const gof = [[s1, 0.72], [d2, 0.27], [t3, 0.01]].reduce((a, [o, p]) => a + (o - N * p) ** 2 / (N * p), 0);
+    tests.push({ name: 'Structure (singles/doubles/triples)', stat: gof, kind: 'chi2', df: 2, p: chiSquarePValue(gof, 2) });
+  }
+  // 6) Serial repeat (draw-to-draw memory), pooled across positions
+  {
+    let rep = 0, tot = 0;
+    for (let i = 1; i < N; i++) for (let pos = 0; pos < 3; pos++) { tot++; if (strings[i][pos] === strings[i - 1][pos]) rep++; }
+    const z = (rep / tot - 0.1) / Math.sqrt(0.1 * 0.9 / tot);
+    tests.push({ name: 'Serial repeat (draw-to-draw memory)', stat: z, kind: 'z', df: null, p: 2 * (1 - normalCdf(Math.abs(z))) });
+  }
+  // 7) Midday vs evening (only if both present in adequate numbers)
+  const mid = objs.filter(o => /midday/i.test(o.date)).map(o => o.draw);
+  const eve = objs.filter(o => /evening/i.test(o.date)).map(o => o.draw);
+  if (mid.length >= 20 && eve.length >= 20) {
+    const fm = new Array(10).fill(0), fe = new Array(10).fill(0);
+    mid.forEach(s => s.split('').forEach(ch => fm[+ch]++));
+    eve.forEach(s => s.split('').forEach(ch => fe[+ch]++));
+    const sm = fm.reduce((a, b) => a + b, 0), se = fe.reduce((a, b) => a + b, 0), sa = sm + se;
+    let c = 0;
+    for (let i = 0; i < 10; i++) {
+      const em = (fm[i] + fe[i]) * sm / sa, ee = (fm[i] + fe[i]) * se / sa;
+      if (em > 0) c += (fm[i] - em) ** 2 / em;
+      if (ee > 0) c += (fe[i] - ee) ** 2 / ee;
+    }
+    tests.push({ name: 'Midday vs evening distribution', stat: c, kind: 'chi2', df: 9, p: chiSquarePValue(c, 9) });
+  }
+
+  // Benjamini–Hochberg FDR
+  const m = tests.length;
+  const sorted = [...tests].sort((a, b) => a.p - b.p);
+  let kmax = -1;
+  sorted.forEach((t, i) => { if (t.p <= ((i + 1) / m) * alpha) kmax = i; });
+  const threshold = kmax >= 0 ? sorted[kmax].p : 0;
+  tests.forEach(t => { t.significant = kmax >= 0 && t.p <= threshold; });
+  const anomalies = tests.filter(t => t.significant);
+
+  return { tests, n: N, m, alpha, anomalies, anyAnomaly: anomalies.length > 0, minP: Math.min(...tests.map(t => t.p)), insufficient: false };
+}
+
+/**
+ * Per-position digit probability model with shrinkage toward uniform. A position only
+ * departs from 1/10 if its digit distribution is significantly non-uniform; otherwise
+ * it is forced uniform. This prevents reading an edge into random noise.
+ *
+ * @param {string[]} strings  Draw strings newest-first
+ * @param {number} lookback   Draws to use
+ * @param {number} alpha      Significance gate per position
+ * @returns {Array<{counts:number[], probs:number[], chi:number, p:number, significant:boolean, n:number}>}
+ */
+export function computePositionModel(strings, lookback = 120, alpha = 0.05) {
+  const recent = strings.slice(0, lookback).filter(s => s && s.length === 3);
+  const n = recent.length;
+  const positions = [];
+  for (let pos = 0; pos < 3; pos++) {
+    const counts = new Array(10).fill(0);
+    recent.forEach(s => counts[+s[pos]]++);
+    const e = n / 10;
+    let chi = 0;
+    counts.forEach(o => { chi += (o - e) ** 2 / e; });
+    const p = chiSquarePValue(chi, 9);
+    const significant = n >= 30 && p < alpha;
+    let probs;
+    if (significant) {
+      const kPrior = 20; // Dirichlet pseudo-counts → shrink toward uniform
+      probs = counts.map(c => (c + kPrior / 10) / (n + kPrior));
+    } else {
+      probs = new Array(10).fill(0.1);
+    }
+    positions.push({ counts, probs, chi, p, significant, n });
+  }
+  return positions;
+}
+
+/**
+ * ADAPTIVE EXACT-PLAY RECOMMENDER. Builds the position model, and ONLY proposes
+ * ranked straight plays when at least one position shows significant bias. With a
+ * fair lottery it abstains (uniform → no edge), which is the honest behavior.
+ *
+ * @param {Array<{date:string, draw:string}>} draws  Newest-first
+ * @param {Object} config { lookback=120, count=5, payout=500, betCost=1, alpha=0.05 }
+ * @returns {{ picks:Array, anyEdge:boolean, model:Array, breakeven:number, lookback:number, n:number, uniform:boolean }}
+ */
+export function recommendExactPlays(draws, config = {}) {
+  const { lookback = 120, count = 5, payout = 500, betCost = 1, alpha = 0.05 } = config;
+  const strings = draws.map(d => d.draw).filter(s => s && s.length === 3);
+  const model = computePositionModel(strings, lookback, alpha);
+  const anyEdge = model.some(m => m.significant);
+  const breakeven = betCost / payout;
+
+  let picks = [];
+  if (anyEdge) {
+    const all = [];
+    for (let a = 0; a < 10; a++) for (let b = 0; b < 10; b++) for (let c = 0; c < 10; c++) {
+      const jp = model[0].probs[a] * model[1].probs[b] * model[2].probs[c];
+      all.push({ exact: `${a}${b}${c}`, p: jp });
+    }
+    all.sort((x, y) => y.p - x.p);
+    picks = all.slice(0, count).map(pk => ({
+      exact: pk.exact,
+      p: pk.p,
+      ev: pk.p * payout - betCost,
+      edge: pk.p > breakeven,
+    }));
+  }
+
+  return { picks, anyEdge, model, breakeven, lookback, n: strings.length, uniform: !anyEdge };
+}
+
+/**
+ * Walk-forward backtest of the adaptive recommender — no look-ahead. On each past
+ * draw it rebuilds the recommender from older draws only and records what would have
+ * happened. Because the recommender abstains with no edge, on a fair lottery it risks
+ * nothing; the "blind" comparison shows the cost of playing anyway.
+ *
+ * @param {Array<{date:string, draw:string}>} draws  Newest-first
+ * @param {Object} config { count=30, lookback=120, picks=5, payout=500, betCost=1, alpha=0.05, minHistory=60 }
+ */
+export function backtestRecommender(draws, config = {}) {
+  const { count = 30, lookback = 120, picks = 5, payout = 500, betCost = 1, alpha = 0.05, minHistory = 60 } = config;
+  let evaluated = 0, edgeDays = 0, straightHits = 0, spend = 0, ret = 0;
+  const limit = Math.min(count, draws.length);
+  for (let i = 0; i < limit; i++) {
+    const past = draws.slice(i + 1);
+    if (past.length < minHistory) break;
+    const rec = recommendExactPlays(past, { lookback, count: picks, payout, betCost, alpha });
+    evaluated++;
+    if (rec.anyEdge) {
+      edgeDays++;
+      spend += picks * betCost;
+      if (rec.picks.some(p => p.exact === draws[i].draw)) { straightHits++; ret += payout; }
+    }
+  }
+  // "blind" arm: playing `picks` straights every evaluated day, expected economics
+  const blindSpend = evaluated * picks * betCost;
+  const blindExpectedReturn = evaluated * picks * (payout / 1000);
+  return {
+    evaluated, edgeDays, straightHits, spend, ret, net: ret - spend,
+    blindSpend, blindExpectedNet: blindExpectedReturn - blindSpend,
+    picks, payout, betCost,
+  };
+}
+
 /** Index of the largest value in an array (first on ties). */
 function argMaxIndex(arr) {
   let bi = 0;

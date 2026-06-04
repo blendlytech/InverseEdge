@@ -57,7 +57,7 @@ src/
 
 ### Product priority
 
-The client (Lawrence) plays **box + straight**, but the **straight/exact bet is the goal** — it pays ~$500 vs ~$80 box. `BestExactPanel` is therefore the headline feature: it surfaces the best specific exact numbers to play straight. Everything else supports that decision.
+The client (Leonard) plays **box + straight**, but the **straight/exact bet is the goal** — it pays ~$500 vs ~$80 box. `BestExactPanel` is therefore the headline feature: it surfaces the best specific exact numbers to play straight. Everything else supports that decision.
 
 ---
 

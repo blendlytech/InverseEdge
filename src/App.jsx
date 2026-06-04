@@ -1,13 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import DrawEntryPanel from './components/DrawEntryPanel';
-import BestExactPanel from './components/BestExactPanel';
-import FrequencyPanel from './components/FrequencyPanel';
+import DailyExactPlaysPanel from './components/DailyExactPlaysPanel';
+import FairnessMonitorPanel from './components/FairnessMonitorPanel';
 import HistoryPanel from './components/HistoryPanel';
-import PlayGeneratorPanel from './components/PlayGeneratorPanel';
-import PatternScanPanel from './components/PatternScanPanel';
-import PredictionPanel from './components/PredictionPanel';
-import TimeMachinePanel from './components/TimeMachinePanel';
-import WinLogPanel from './components/WinLogPanel';
 import { supabase } from './utils/supabaseClient';
 
 export default function App() {
@@ -21,7 +16,7 @@ export default function App() {
     catch { return []; }
   });
 
-  const [historyFilterDays, setHistoryFilterDays] = useState(() => {
+  const [historyFilterDays] = useState(() => {
     const saved = localStorage.getItem('inverse_edge_history_days');
     return saved ? parseInt(saved, 10) : 14;
   });
@@ -96,7 +91,7 @@ export default function App() {
           Inverse<span style={{ color: 'var(--primary)' }}>Edge</span>
         </h1>
         <p style={{ fontSize: '15px', color: 'var(--text-muted)', fontWeight: '500' }}>
-          The 120-Combination Pick-3 Strategy System
+          Honest Pick-3 Exact-Play Recommendations
         </p>
       </header>
 
@@ -134,6 +129,10 @@ export default function App() {
         position: 'relative', zIndex: 2,
         opacity: isLoading ? 0.6 : 1, transition: 'opacity 0.3s'
       }}>
+        <DailyExactPlaysPanel draws={draws} />
+
+        <FairnessMonitorPanel draws={draws} />
+
         <DrawEntryPanel
           draws={draws}
           userDraws={userDraws}
@@ -141,27 +140,6 @@ export default function App() {
           onDeleteUserDraw={handleDeleteUserDraw}
           historyFilterDays={historyFilterDays}
         />
-
-        <BestExactPanel
-          draws={draws}
-          historyFilterDays={historyFilterDays}
-        />
-
-        <PlayGeneratorPanel
-          draws={draws}
-          historyFilterDays={historyFilterDays}
-          setHistoryFilterDays={setHistoryFilterDays}
-        />
-
-        <FrequencyPanel draws={draws} />
-
-        <PatternScanPanel draws={draws} />
-
-        <PredictionPanel draws={draws} historyFilterDays={historyFilterDays} />
-
-        <WinLogPanel draws={draws} />
-
-        <TimeMachinePanel draws={draws} historyFilterDays={historyFilterDays} />
 
         {/* Collapsible draw history */}
         <div className="glass-card" style={{ padding: '14px 18px' }}>
@@ -186,7 +164,7 @@ export default function App() {
       </main>
 
       <footer style={{ marginTop: '48px', padding: '16px 0', borderTop: '1px solid var(--border-color)', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
-        <p>© 2026 InverseEdge. The 120-Combination Pick-3 Strategy. Please gamble responsibly.</p>
+        <p>© 2026 InverseEdge. Honest Pick-3 analysis. Please gamble responsibly.</p>
       </footer>
     </div>
   );
