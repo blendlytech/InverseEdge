@@ -67,7 +67,7 @@ All primary state lives in **App.jsx** (no global store):
 
 | State | Type | Persisted |
 | --- | --- | --- |
-| `draws` | `Array<{date, draw}>` | Supabase (falls back to `DEFAULT_MOCK_DRAWS`) |
+| `draws` | `Array<{date, draw}>` | Supabase + user-entered draws (real data only — no fallback dataset) |
 | `historyFilterDays` | `number` | `localStorage` key `"inverse_edge_history_days"` |
 | `showHistory` | `boolean` | None (collapsible draw history panel) |
 | `isLoading` | `boolean` | None |
@@ -213,7 +213,7 @@ npm run lint      # ESLint (flat config)
 - **No TypeScript** — stay in `.jsx` / `.js`
 - **No new dependencies** without a clear need; the stack is intentionally minimal
 - **Dark theme only** — no light mode
-- **`DEFAULT_MOCK_DRAWS`** in App.jsx is the fallback dataset; Supabase data overrides it on load
+- **Real data only** — `draws` comes solely from Supabase + user-entered draws. There is NO demo/mock fallback dataset; never reintroduce one. With no real data the app shows an empty state prompting the user to add draws
 - **Supabase table**: `lottery_draws` — columns match the draw object shape
 - **Never modify `generateMasterList()`** — the 120-combo universe is the invariant the whole strategy depends on
 - The app is a **static SPA**; no server-side code, no API routes

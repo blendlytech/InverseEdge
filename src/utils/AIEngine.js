@@ -762,3 +762,211 @@ export function replaySystemPick(draws, index, config = {}) {
     inActive: !isDoubleTriple && activeSet.has(actualBox),
   };
 }
+
+/** Index of the largest value in an array (first on ties). */
+function argMaxIndex(arr) {
+  let bi = 0;
+  let bv = -Infinity;
+  arr.forEach((v, i) => { if (v > bv) { bv = v; bi = i; } });
+  return bi;
+}
+
+/**
+ * PATTERN-INFORMED PREDICTION — blends the app's overdue/gap thesis with the
+ * Winning-Number Pattern Scanner profile to produce a ranked shortlist.
+ *
+ * HONESTY NOTE: a legitimate Pick-3 draw is independent and uniform, so this does
+ * NOT raise the true probability of any combo (every box stays 6/1000). It is a
+ * disciplined, transparent way to choose IF playing anyway — `dueScore` carries the
+ * product thesis; the scanner profile (sum band, high/low & even/odd shape, digit
+ * carryover) only re-ranks within it.
+ *
+ * @param {Array<{date:string, draw:string}>} draws  Newest-first
+ * @param {Object} config { lookback=60, historyFilterDays=14, dueWeight=0.65, count=3 }
+ * @returns {{ predictions:Array, profile:Object, doublesSideBet:Object }}
+ */
+export function predictNextCombo(draws, config = {}) {
+  const { lookback = 60, historyFilterDays = 14, dueWeight = 0.65, count = 3 } = config;
+
+  const drawStrings = draws.map(d => d.draw);
+  const windowStrings = drawStrings.slice(0, lookback);
+  const masterList = generateMasterList();
+  const active = applyHistoryFilter(masterList, drawStrings, historyFilterDays);
+
+  // --- Profile derived from the scanner over the window ---
+  const sumStruct = scanSumStructurePatterns(windowStrings);
+  const repeats = scanRepeatsAndRuns(windowStrings);
+  const dt = scanDoubleTriplePatterns(windowStrings);
+
+  // Sum mean & spread from the observed distribution
+  let n = 0;
+  let sAccum = 0;
+  sumStruct.sumCounts.forEach((c, s) => { n += c; sAccum += c * s; });
+  const sumMean = n ? sAccum / n : 13.5;
+  let varAccum = 0;
+  sumStruct.sumCounts.forEach((c, s) => { varAccum += c * (s - sumMean) ** 2; });
+  const sumStd = n ? Math.max(2, Math.sqrt(varAccum / n)) : 5;
+
+  const dominantHigh = argMaxIndex(sumStruct.highCounts); // 0..3 high digits
+  const dominantEven = argMaxIndex(sumStruct.evenCounts); // 0..3 even digits
+
+  // Carryover only matters if recent draws actually carry digits forward
+  const carryWeight = Math.min(1, repeats.avgCarryover / 1.5);
+  const lastDigits = new Set((drawStrings[0] || '').split(''));
+
+  // Overdue scores over the active list
+  const gapMap = {};
+  scoreComboGaps(active, drawStrings, lookback).forEach(g => { gapMap[g.combo] = g; });
+
+  // Position trends for the most-likely exact ordering
+  const posFreq = getPositionFrequencies(drawStrings, lookback);
+  const posMax = posFreq.map(f => Math.max(1, ...Object.values(f)));
+
+  const wSum = 0.35;
+  const wHigh = 0.2;
+  const wEven = 0.2;
+  const wCarry = 0.25 * carryWeight;
+  const wTotal = wSum + wHigh + wEven + wCarry;
+
+  const scored = active.map(combo => {
+    const digits = combo.split('').map(Number);
+    const s = digits.reduce((a, b) => a + b, 0);
+    const hc = digits.filter(d => d >= 5).length;
+    const ec = digits.filter(d => d % 2 === 0).length;
+    const shared = digits.filter(d => lastDigits.has(String(d))).length;
+
+    const sumScore = Math.exp(-((s - sumMean) ** 2) / (2 * sumStd * sumStd));
+    const highScore = 1 - Math.abs(hc - dominantHigh) / 3;
+    const evenScore = 1 - Math.abs(ec - dominantEven) / 3;
+    const carryScore = shared / 3;
+
+    const profileMatch = (sumScore * wSum + highScore * wHigh + evenScore * wEven + carryScore * wCarry) / wTotal;
+
+    const g = gapMap[combo] || { lastHit: 999, frequency: 0 };
+    const dueScore = g.lastHit === 999 ? 1 : Math.min(g.lastHit / lookback, 1);
+
+    const final = dueWeight * dueScore + (1 - dueWeight) * profileMatch;
+    const best = getBestExactOrdering(combo, posFreq, posMax);
+
+    return {
+      combo,
+      exact: best.perm,
+      sum: s,
+      highCount: hc,
+      evenCount: ec,
+      carryShared: shared,
+      sumScore,
+      highScore,
+      evenScore,
+      carryScore,
+      posScore: best.posScore,
+      dueScore,
+      profileMatch,
+      final,
+      lastHit: g.lastHit,
+    };
+  }).sort((a, b) => b.final - a.final);
+
+  const hotDigit = argMaxIndex(Object.values(dt.doubleDigitFreq));
+
+  return {
+    predictions: scored.slice(0, count),
+    profile: {
+      sumMean,
+      sumStd,
+      targetSum: Math.round(sumMean),
+      dominantHigh,
+      dominantEven,
+      avgCarryover: repeats.avgCarryover,
+      carryWeight,
+      lastDraw: drawStrings[0] || '',
+      windowCount: windowStrings.length,
+      activeCount: active.length,
+      dueWeight,
+    },
+    doublesSideBet: {
+      currentGap: dt.doubleStats.currentGap,
+      avgGap: dt.doubleStats.avgGap,
+      overdue: dt.doubleStats.avgGap != null && dt.doubleStats.currentGap > dt.doubleStats.avgGap,
+      hotDigit,
+      suggestedDouble: `${hotDigit}${hotDigit}`,
+      count: dt.doubleStats.count,
+    },
+  };
+}
+
+/**
+ * BATCH TIME MACHINE — replays both the live system (Best Exact Plays + Top Picks)
+ * and the Pattern-Informed Prediction over the most recent `count` draws, each with
+ * no look-ahead, and tallies actual hit rates against the random baseline.
+ *
+ * Baselines reflect that draws are uniform: any fixed-size selection has the same
+ * expected hit rate, so a strategy "working" means beating these — which over a small
+ * sample is usually just noise. That comparison is the whole point of the tool.
+ *
+ * @param {Array<{date:string, draw:string}>} draws  Newest-first
+ * @param {Object} config { count=30, lookback=28, historyFilterDays=14, exactCount=3, boxCount=3, dueWeight=0.65, minHistory=10 }
+ * @returns {{
+ *   evaluated:number, outOfUniverse:number, avgActive:number,
+ *   system:{straight:number, box:number, sheet:number},
+ *   prediction:{straight:number, box:number},
+ *   baseline:{straightRate:number, boxRate:number, sheetRate:number},
+ *   exactCount:number, boxCount:number
+ * }}
+ */
+export function batchReplay(draws, config = {}) {
+  const {
+    count = 30, lookback = 28, historyFilterDays = 14,
+    exactCount = 3, boxCount = 3, dueWeight = 0.65, minHistory = 10,
+  } = config;
+
+  let evaluated = 0;
+  let outOfUniverse = 0;
+  let activeSum = 0;
+  let sysStraight = 0;
+  let sysBox = 0;
+  let sysSheet = 0;
+  let predStraight = 0;
+  let predBox = 0;
+
+  const limit = Math.min(count, draws.length);
+  for (let i = 0; i < limit; i++) {
+    const pastLen = draws.length - (i + 1);
+    if (pastLen < minHistory) break; // older draws lack enough history for a fair test
+
+    const actual = draws[i].draw;
+    const isDT = isDoubleOrTriple(actual);
+    const actualBox = isDT ? '' : normalizeDraw(actual);
+
+    const r = replaySystemPick(draws, i, { lookback, historyFilterDays, exactCount, boxCount });
+    evaluated++;
+    activeSum += r.activeCount;
+    if (isDT) outOfUniverse++;
+    if (r.exactHit) sysStraight++;
+    if (r.exactBoxHit || r.boxPickHit) sysBox++;
+    if (r.inActive) sysSheet++;
+
+    const pred = predictNextCombo(draws.slice(i + 1), {
+      lookback, historyFilterDays, dueWeight, count: Math.max(exactCount, boxCount),
+    });
+    if (pred.predictions.slice(0, exactCount).some(p => p.exact === actual)) predStraight++;
+    if (!isDT && pred.predictions.slice(0, boxCount).some(p => p.combo === actualBox)) predBox++;
+  }
+
+  const avgActive = evaluated ? activeSum / evaluated : 0;
+
+  return {
+    evaluated,
+    outOfUniverse,
+    avgActive,
+    system: { straight: sysStraight, box: sysBox, sheet: sysSheet },
+    prediction: { straight: predStraight, box: predBox },
+    baseline: {
+      straightRate: exactCount / 1000,
+      boxRate: (boxCount * 6) / 1000,
+      sheetRate: (avgActive * 6) / 1000,
+    },
+    exactCount,
+    boxCount,
+  };
+}

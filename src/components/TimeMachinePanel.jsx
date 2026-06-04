@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { replaySystemPick, toGuideForm } from '../utils/AIEngine';
+import { replaySystemPick, batchReplay, toGuideForm } from '../utils/AIEngine';
 import Tooltip from './Tooltip';
 
 const HelpIcon = () => (
@@ -32,6 +32,21 @@ const LOOKBACK_PRESETS = [
   { label: '60 days', value: 120 },
 ];
 
+const BATCH_PRESETS = [20, 30, 50, 100];
+
+const WEIGHT_MODES = [
+  { key: 'overdue', label: 'Overdue-led', dueWeight: 0.65 },
+  { key: 'even', label: 'Even', dueWeight: 0.5 },
+  { key: 'profile', label: 'Profile-led', dueWeight: 0.35 },
+];
+
+// Color a measured rate against its random baseline
+function rateColor(rate, baseline) {
+  if (rate > baseline * 1.15) return 'var(--primary)';
+  if (rate < baseline * 0.85) return 'var(--danger)';
+  return 'var(--text-main)';
+}
+
 // Grade the replay into a single verdict banner
 function getVerdict(r) {
   if (r.pastCount === 0) {
@@ -63,13 +78,21 @@ export default function TimeMachinePanel({ draws, historyFilterDays = 14 }) {
   const [index, setIndex] = useState(0);
   const [lookback, setLookback] = useState(28);
   const [exactCount, setExactCount] = useState(3);
+  const [batchCount, setBatchCount] = useState(30);
+  const [predMode, setPredMode] = useState('overdue');
 
   const total = draws.length;
   const safeIndex = Math.min(index, Math.max(0, total - 1));
+  const dueWeight = WEIGHT_MODES.find(m => m.key === predMode).dueWeight;
 
   const result = useMemo(
     () => (total ? replaySystemPick(draws, safeIndex, { lookback, historyFilterDays, exactCount, boxCount: 3 }) : null),
     [draws, safeIndex, lookback, historyFilterDays, exactCount, total]
+  );
+
+  const batch = useMemo(
+    () => (total ? batchReplay(draws, { count: batchCount, lookback, historyFilterDays, exactCount, boxCount: 3, dueWeight }) : null),
+    [draws, batchCount, lookback, historyFilterDays, exactCount, dueWeight, total]
   );
 
   if (total === 0) return null;
@@ -98,6 +121,136 @@ export default function TimeMachinePanel({ draws, historyFilterDays = 14 }) {
 
       {isOpen && result && (
         <>
+          {/* ── BATCH HIT-RATE ──────────────────────────────────────────── */}
+          <div style={{ marginTop: '14px', marginBottom: '18px', padding: '14px 16px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '10px' }}>
+            <h4 style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: '700', color: 'var(--text-main)', display: 'flex', alignItems: 'center' }}>
+              📊 Batch Hit-Rate
+              <Tooltip text="Replays both the live system (Best Exact Plays + Top Picks) and the Pattern-Informed Prediction across the most recent N draws — each with no look-ahead — and compares actual hit rates to the random baseline. Beating the baseline over a small sample is usually luck; this is how you tell.">
+                <HelpIcon />
+              </Tooltip>
+            </h4>
+            <p style={{ margin: '0 0 12px', fontSize: '11px', color: 'var(--text-muted)' }}>
+              Uses the scan window &amp; exact-play count from the settings below. Prediction weighting:
+            </p>
+
+            {/* Batch controls */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Test last</span>
+                {BATCH_PRESETS.map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setBatchCount(n)}
+                    style={{
+                      padding: '4px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
+                      border: `1px solid ${batchCount === n ? 'var(--primary)' : 'var(--border-color)'}`,
+                      background: batchCount === n ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.03)',
+                      color: batchCount === n ? 'var(--primary)' : 'var(--text-muted)',
+                      fontWeight: batchCount === n ? '600' : 'normal',
+                    }}
+                  >
+                    {n}
+                  </button>
+                ))}
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>draws</span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {WEIGHT_MODES.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setPredMode(key)}
+                    style={{
+                      padding: '4px 10px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer',
+                      border: `1px solid ${predMode === key ? 'var(--secondary)' : 'var(--border-color)'}`,
+                      background: predMode === key ? 'rgba(234,179,8,0.12)' : 'rgba(255,255,255,0.03)',
+                      color: predMode === key ? 'var(--secondary)' : 'var(--text-muted)',
+                      fontWeight: predMode === key ? '600' : 'normal',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {batch && batch.evaluated > 0 ? (() => {
+              const ev = batch.evaluated;
+              const b = batch.baseline;
+              const rows = [
+                {
+                  name: 'System (Best Exact + Top Picks)',
+                  cells: [
+                    { hits: batch.system.straight, base: b.straightRate },
+                    { hits: batch.system.box, base: b.boxRate },
+                    { hits: batch.system.sheet, base: b.sheetRate },
+                  ],
+                },
+                {
+                  name: `Prediction (${WEIGHT_MODES.find(m => m.key === predMode).label})`,
+                  cells: [
+                    { hits: batch.prediction.straight, base: b.straightRate },
+                    { hits: batch.prediction.box, base: b.boxRate },
+                    { hits: null, base: b.sheetRate },
+                  ],
+                },
+              ];
+              const headerCell = { padding: '7px 8px', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', textAlign: 'right', fontWeight: '700' };
+              const cell = { padding: '7px 8px', fontSize: '12px', textAlign: 'right', fontFamily: 'var(--font-mono)' };
+              return (
+                <>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '420px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <th style={{ ...headerCell, textAlign: 'left' }}>Strategy</th>
+                          <th style={headerCell}>Straight (top {batch.exactCount})</th>
+                          <th style={headerCell}>Box (top {batch.boxCount})</th>
+                          <th style={headerCell}>On sheet (~{Math.round(batch.avgActive)})</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map(row => (
+                          <tr key={row.name} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                            <td style={{ padding: '8px', fontSize: '12px', color: 'var(--text-main)', fontWeight: '600' }}>{row.name}</td>
+                            {row.cells.map((c, ci) => (
+                              <td key={ci} style={cell}>
+                                {c.hits == null ? (
+                                  <span style={{ color: 'var(--text-muted)' }}>—</span>
+                                ) : (
+                                  <>
+                                    <span style={{ color: rateColor(c.hits / ev, c.base), fontWeight: '700' }}>{((c.hits / ev) * 100).toFixed(1)}%</span>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}> ({c.hits}/{ev})</span>
+                                  </>
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                        {/* Baseline row */}
+                        <tr>
+                          <td style={{ padding: '8px', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>Random baseline</td>
+                          <td style={{ ...cell, color: 'var(--text-muted)' }}>{(b.straightRate * 100).toFixed(1)}%</td>
+                          <td style={{ ...cell, color: 'var(--text-muted)' }}>{(b.boxRate * 100).toFixed(1)}%</td>
+                          <td style={{ ...cell, color: 'var(--text-muted)' }}>{(b.sheetRate * 100).toFixed(1)}%</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <p style={{ marginBottom: 0, marginTop: '10px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
+                    Tested <strong style={{ color: 'var(--text-main)' }}>{ev}</strong> draws{batch.outOfUniverse > 0 && <> ({batch.outOfUniverse} were doubles/triples — uncoverable)</>}. Green = beat the random baseline, red = below it.{' '}
+                    {ev < 50
+                      ? 'This is a small sample — a few lucky hits swing the rate hard, so treat any edge as unproven.'
+                      : 'Even here, draws are random: a strategy near the baseline is expected, and beating it is most likely variance.'}
+                  </p>
+                </>
+              );
+            })() : (
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Not enough draw history to run a batch test.</p>
+            )}
+          </div>
+
           {/* ── DRAW SELECTOR ───────────────────────────────────────────── */}
           <div style={{
             display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center',
